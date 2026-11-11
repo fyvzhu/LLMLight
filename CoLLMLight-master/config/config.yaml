@@ -1,0 +1,64 @@
+# 唯一训练/导出/CityFlow测试配置；所有相对路径以项目根目录为准。
+experiment:
+  run_name: qwen15b_smoke
+  random_seed: 42
+  output_root: ./outputs
+
+# 教师连接参数与密钥在 .env；这里仅设置数据生成任务。
+teacher_data:
+  source_path: ./data/FinetuneData/SynTrain_sample_all.json
+  output_path: ./data/FinetuneData/syn_rt_data.json
+  max_samples: 5
+  random_seed: 42
+  resume: true
+data:
+  eval_ratio: 0.2
+  sft_require_ra_match: true
+sft:
+  lora:
+    rank: 8
+    alpha: 16
+    dropout: 0.0
+    target_modules: all-linear
+  learning_rate: 0.0001
+  num_epochs: 1
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: true
+  quantization_bits: 0
+  per_device_batch_size: 1
+  max_steps: 2
+  logging_steps: 1
+  
+# batch_size 按 query 数计数：每条交通记录对应 ATR、RA 两项，必须为偶数。
+ppo:
+  lora:
+    rank: 8
+    alpha: 16
+    dropout: 0.0
+    target_modules: all-linear
+  learning_rate: 1.0e-05
+  num_epochs: 1
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: true
+  quantization_bits: 0
+  batch_size: 2
+  mini_batch_size: 1
+  optimization_epochs: 1
+  max_updates: 1
+  max_new_tokens: 1024
+  temperature: 0.1
+export:
+  source: ppo_best
+  output_dir: null  # 自动使用 outputs/<run_name>/trained_best_model
+  device: cpu
+  dtype: auto
+  validate: true
+  auto_export: true
+cityflow_test:
+  model_path: null  # 默认使用上面的完整模型；可填写其他完整模型目录
+  backend: transformers
+  dataset: synthetic_4x4
+  traffic_file: anon_4_4_synthetic_8000.json
+  run_counts: 60
+  max_new_tokens: 1024
+  seed: 42

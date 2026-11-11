@@ -1,0 +1,7 @@
+# 安装目标：CoLLMLight-master/.venv；仅记录本次新增或调整
+# TRL 0.9.2 与原 Transformers 5.20.2 初始化 SFTTrainer 不兼容
+huggingface-hub==0.36.2  # 兼容性调整，原版本 2.4.0
+tokenizers==0.21.4  # 兼容性调整，原版本 0.23.3
+transformers==4.48.2  # 兼容性调整，原版本 5.20.2
+
+# 第二轮目录/配置/导出改造：已检查原 uv 环境，PyYAML==6.0.3 等均已存在；无新增或版本调整。

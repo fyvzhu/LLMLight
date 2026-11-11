@@ -1,0 +1,2533 @@
+[
+  {
+    "sample_id": "aa41197ad8908e031ed40641c9c2d79769251eb024c7eaee848e2b7c6c35b8d3",
+    "atr_user_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ETWT\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n",
+    "atr_output": "## Identify Critical Lanes\n\nLocal Critical Lanes: None (No traffic data provided for local lanes NL, NT, SL, ST, EL, ET, WL, WT implies empty or free-flowing conditions).\nNeighboring Critical Lanes: None (No upstream/downstream occupancy data provided implies good state with low occupancy).\n\n## Suggest a local traffic signal strategy\n\n- **Suggested Signal**: ETWT\n    - **Applicable Conditions**: The current observation shows no queued cars, no moving cars, and no waiting time for any lane. This indicates the intersection is currently empty or has negligible traffic demand.\n    - **Rationale**: Since the previous signal phase was ETWT and there is no evidence of congestion or accumulation in any lane (local or neighboring), maintaining the current phase is a safe default. It continues to serve the East-West through traffic which was previously active. Without specific data indicating high demand in North-South directions (NT/ST) or Left-turn lanes (NL/SL/EL/WL), there is no justification to switch phases. Switching unnecessarily could introduce unnecessary all-red intervals or delay potential minor flows without benefit.\n    - **Expected Effect**: The intersection remains clear. If any minor East-West traffic arrives, it will be served immediately. If North-South traffic arrives, it will wait, but given the lack of historical queue data, this wait time is expected to be minimal and not critical.\n\n## Summary\n\nThe traffic state is effectively empty or free-flowing based on the provided null data. No critical congestion or safety risks are identified. The most robust action is to maintain the current signal phase (ETWT) to ensure continuity for any potential East-West flow, while monitoring for any sudden changes in the next timestep.",
+    "data": {
+      "Intersection": "intersection_1_3",
+      "Timestep": 2,
+      "Traffic_state_history": [
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        },
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 3.03
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 3.03
+          },
+          "WL": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 3.03
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        }
+      ],
+      "Current_Observation": {
+        "empty_lanes": [
+          "NT",
+          "NL",
+          "SL",
+          "ET",
+          "EL"
+        ],
+        "non_empty_lanes": {
+          "ST": {
+            "queue_car_num": 0.0,
+            "coming_car_num": 1,
+            "avg_wait_time": 0.0,
+            "occupancy": 3.0303030303030303
+          },
+          "WT": {
+            "queue_car_num": 0.0,
+            "coming_car_num": 1,
+            "avg_wait_time": 0.0,
+            "occupancy": 3.0303030303030303
+          },
+          "WL": {
+            "queue_car_num": 0.0,
+            "coming_car_num": 1,
+            "avg_wait_time": 0.0,
+            "occupancy": 3.0303030303030303
+          }
+        },
+        "up_down_stream_view": {
+          "exist": false,
+          "ST": {
+            "upstream": {}
+          },
+          "WT": {},
+          "WL": {}
+        },
+        "up_down_stream_interlanes": [],
+        "long_distance_info": {
+          "NT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "NL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ST": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "SL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ET": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "EL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          }
+        },
+        "memory": {
+          "recent_memory": {
+            "signal": "ETWT",
+            "pos": []
+          },
+          "lane_memories": [],
+          "similar_lane_memory": []
+        }
+      },
+      "Signal_Rank": {
+        "ETWT": 30.0,
+        "NTST": 30.0,
+        "ELWL": 30.0,
+        "NLSL": 0.0
+      },
+      "Signal_Consequence": {
+        "ETWT": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 5,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.1,
+            "Average Waiting Time (mins)": 0.1,
+            "Occupancy Change (%)": 18.18,
+            "Occupancy (%)": 21.21
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 1,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.35,
+            "Average Waiting Time (mins)": 0.35,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          }
+        },
+        "NTST": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 1,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 5,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 15.15,
+            "Occupancy (%)": 18.18
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.1,
+            "Average Waiting Time (mins)": 0.1,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.35,
+            "Average Waiting Time (mins)": 0.35,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          }
+        },
+        "ELWL": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 5,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.1,
+            "Average Waiting Time (mins)": 0.1,
+            "Occupancy Change (%)": 18.18,
+            "Occupancy (%)": 21.21
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.1,
+            "Average Waiting Time (mins)": 0.1,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 1,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 0.0
+          }
+        },
+        "NLSL": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 5,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.1,
+            "Average Waiting Time (mins)": 0.1,
+            "Occupancy Change (%)": 18.18,
+            "Occupancy (%)": 21.21
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.1,
+            "Average Waiting Time (mins)": 0.1,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.35,
+            "Average Waiting Time (mins)": 0.35,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          }
+        }
+      },
+      "Best_Signal": "ELWL",
+      "sample_id": "aa41197ad8908e031ed40641c9c2d79769251eb024c7eaee848e2b7c6c35b8d3"
+    },
+    "complex_level": "easy",
+    "teacher_atr_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ETWT\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n## Requirement (Strict): You must only use the following reasoning steps:\n- Identify critical lanes\n- Suggest a local traffic signal strategy\n",
+    "ra_user_prompt": "You are now in the **Reactive Action** phase at time step 2.\n\nYour goal is to quickly and accurately select the signal phase to activate at this moment, based on:\n- The prior **Advance Traffic Reasoning (ATR)** conducted at time step 1\n- The **Current Observation** at time step 2\n- The **Local Signal Priority** ranking based on estimated waiting time reduction\n\n---\n\n# Advance Traffic Reasoning (ATR) at time step 1\n\n## Identify Critical Lanes\n\nLocal Critical Lanes: None (No traffic data provided for local lanes NL, NT, SL, ST, EL, ET, WL, WT implies empty or free-flowing conditions).\nNeighboring Critical Lanes: None (No upstream/downstream occupancy data provided implies good state with low occupancy).\n\n## Suggest a local traffic signal strategy\n\n- **Suggested Signal**: ETWT\n    - **Applicable Conditions**: The current observation shows no queued cars, no moving cars, and no waiting time for any lane. This indicates the intersection is currently empty or has negligible traffic demand.\n    - **Rationale**: Since the previous signal phase was ETWT and there is no evidence of congestion or accumulation in any lane (local or neighboring), maintaining the current phase is a safe default. It continues to serve the East-West through traffic which was previously active. Without specific data indicating high demand in North-South directions (NT/ST) or Left-turn lanes (NL/SL/EL/WL), there is no justification to switch phases. Switching unnecessarily could introduce unnecessary all-red intervals or delay potential minor flows without benefit.\n    - **Expected Effect**: The intersection remains clear. If any minor East-West traffic arrives, it will be served immediately. If North-South traffic arrives, it will wait, but given the lack of historical queue data, this wait time is expected to be minimal and not critical.\n\n## Summary\n\nThe traffic state is effectively empty or free-flowing based on the provided null data. No critical congestion or safety risks are identified. The most robust action is to maintain the current signal phase (ETWT) to ensure continuity for any potential East-West flow, while monitoring for any sudden changes in the next timestep.\n\n---\n\n# Current Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 1 signal: ETWT\nTimestep 2 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|ST|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n|WT|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n|WL|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n\n\n\n---\n\n# Local Signal Priority\nThis rank only considers your own intersection and assumes the downstream allows the release.\n|Rank|Signal|Waiting Time Reduction|\n|1|ETWT|0.5 mins|\n|2|NTST|0.5 mins|\n|3|ELWL|0.5 mins|\n|4|NLSL|0.0 mins|\n\n\n\n---\n\n# Instruction\n\nPlease:\n\n1. Compare the ATR suggestions with the current traffic state.  \n2. If the current situation aligns with ATR predictions, select the recommended signal accordingly.  \n3. If the current situation **deviates** from ATR, make necessary adjustments to respond to new patterns.  \n4. If **upstream/downstream influence is minimal or negligible**, directly select the top-ranked signal from the Local Signal Priority table.  \n5. Do not congest downstream lanes. When the occupancy of Lane X, plus that of any other X's downstream lanes, is close to 100%, you must delay the release of X.\n6. Decide whether the ATR output was **actually useful** in your decision using the `used_atr` flag:  \n   - `used_atr = 1`: The ATR output was referenced and influenced the decision.  \n   - `used_atr = 0`: The decision was made independently of the ATR output.\n\n---\n\n# Output Format\n\nReturn your result in the following **structured JSON format**:\n\n```json\n{\n  \"signal\": \"<Selected signal phase, e.g., ETWT, NTST, NLSL, ELWL>\",\n  \"reason\": \"<Brief justification: why this signal is chosen based on traffic observation, local signal ranking, and (if applicable) the ATR suggestion.>\",\n  \"used_atr\": <0 or 1>\n}\n```",
+    "ra_output": "```json\n{\n  \"signal\": \"ETWT\",\n  \"reason\": \"The current observation shows negligible traffic (only 1 moving car each in ST, WT, and WL with 0 queued cars). The ATR correctly predicted a free-flowing state and recommended maintaining ETWT. Although WL has a vehicle, its occupancy is very low (3.03%), and switching phases would introduce unnecessary delay for the East-West through traffic which is currently active. The Local Signal Priority also ranks ETWT as the top choice for waiting time reduction. There are no downstream congestion risks.\",\n  \"used_atr\": 1\n}\n```"
+  },
+  {
+    "sample_id": "6701b1538af85f7c2c819a5345de76094f78b29d5205c17681d2f0254cb95be0",
+    "atr_user_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|NT|9|0|0(+0)|9(+9)|0.0(+0.0)|27.27(+27.27)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ETWT\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n",
+    "atr_output": "## Identify Critical Lanes\nLocal Critical Lanes: NT (North Through) - High occupancy (27.27%) and increasing queue (9 cars), currently blocked by ETWT phase.\nNeighboring Critical Lanes: None reported (assumed low occupancy/good state per instructions).\n\n## Reasoning Topic 1: Analysis of Current Signal Effectiveness and Local Queue Buildup\nThe current signal phase is **ETWT** (East/West Through). However, the only lane with reported traffic is **NT** (North Through), which has accumulated 9 queued cars and an occupancy of 27.27% at Timestep 1. Since the signal is serving East-West traffic while North-South traffic is building up, the current phase is ineffective for the existing demand. The waiting time for NT is currently 0.0, but the queue is growing rapidly (+9 cars). If the ETWT phase continues, the NT queue will grow further, potentially leading to upstream congestion or excessive waiting times, violating the principle of not keeping lanes waiting too long when downstream conditions allow.\n\n## Reasoning Topic 2: Downstream Constraint Check for Potential Phase Switch\nTo relieve the NT queue, we must consider switching to a phase that serves NT, such as **NTST** (North/South Through) or **NLSL** (North/South Left). \n- **Downstream Check**: The instructions state that if upstream/downstream information isn't mentioned, they are in a good state with low occupancy. Therefore, the downstream lanes for NT (likely South-bound lanes of the next intersection) are assumed to have low occupancy.\n- **Conclusion**: It is safe to release NT traffic without risking downstream blockage.\n\n## Conditional Signal Suggestions\n\n- **Suggested Signal**: NTST\n    - **Applicable Conditions**: This signal is suitable given the current accumulation of vehicles in the NT lane and the lack of reported traffic in East-West lanes (ET, WT) or other conflicting movements.\n    - **Rationale**: The NT lane has the highest immediate demand (9 queued cars, 27.27% occupancy). Continuing ETWT would ignore this demand and cause unnecessary delay. Switching to NTST allows the clearing of the North Through queue. Since ST (South Through) data is not reported, it is assumed empty or low, so serving NT is the priority. This balances local urgency by addressing the only active queue.\n    - **Expected Effect**: The 9 queued cars in NT will begin to move, reducing occupancy and preventing further queue buildup. Waiting time for NT vehicles will be minimized.\n\n## Summary\nThe current ETWT phase is mismatched with the observed traffic demand, which is concentrated solely in the NT lane. With no downstream congestion risks reported, the optimal strategy is to switch to the **NTST** phase at Timestep 2 to clear the accumulating North Through queue.",
+    "data": {
+      "Intersection": "intersection_3_4",
+      "Timestep": 2,
+      "Traffic_state_history": [
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 9,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 9,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 27.27,
+            "Occupancy (%)": 27.27
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        },
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 10,
+            "Cars Output": 0,
+            "Queued Cars Change": 11.0,
+            "Queued Cars": 11.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 8,
+            "Average Waiting Time Change (mins)": 0.23,
+            "Average Waiting Time (mins)": 0.23,
+            "Occupancy Change (%)": 30.31,
+            "Occupancy (%)": 57.58
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 1.38,
+            "Max Average Waiting Time": 0.23
+          }
+        }
+      ],
+      "Current_Observation": {
+        "empty_lanes": [
+          "NL",
+          "ST",
+          "SL",
+          "ET",
+          "EL",
+          "WT",
+          "WL"
+        ],
+        "non_empty_lanes": {
+          "NT": {
+            "queue_car_num": 11.0,
+            "coming_car_num": 8,
+            "avg_wait_time": 0.2287878787878788,
+            "occupancy": 57.57575757575758
+          }
+        },
+        "up_down_stream_view": {
+          "exist": false,
+          "NT": {}
+        },
+        "up_down_stream_interlanes": [],
+        "long_distance_info": {
+          "NT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "NL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ST": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "SL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ET": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "EL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          }
+        },
+        "memory": {
+          "recent_memory": {
+            "signal": "ETWT",
+            "pos": []
+          },
+          "lane_memories": [],
+          "similar_lane_memory": []
+        }
+      },
+      "Signal_Rank": {
+        "ETWT": 0.0,
+        "NTST": 721.0,
+        "ELWL": 0.0,
+        "NLSL": 0.0
+      },
+      "Signal_Consequence": {
+        "ETWT": {
+          "NT": {
+            "Cars Input": 10,
+            "Cars Output": 0,
+            "Queued Cars Change": 13.0,
+            "Queued Cars": 24.0,
+            "Moving Cars Change": -3,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.25,
+            "Average Waiting Time (mins)": 0.48,
+            "Occupancy Change (%)": 30.3,
+            "Occupancy (%)": 87.88
+          }
+        },
+        "NTST": {
+          "NT": {
+            "Cars Input": 10,
+            "Cars Output": 10,
+            "Queued Cars Change": -4.0,
+            "Queued Cars": 7.0,
+            "Moving Cars Change": 4,
+            "Moving Cars": 12,
+            "Average Waiting Time Change (mins)": -0.08,
+            "Average Waiting Time (mins)": 0.15,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 57.58
+          }
+        },
+        "ELWL": {
+          "NT": {
+            "Cars Input": 10,
+            "Cars Output": 0,
+            "Queued Cars Change": 13.0,
+            "Queued Cars": 24.0,
+            "Moving Cars Change": -3,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.25,
+            "Average Waiting Time (mins)": 0.48,
+            "Occupancy Change (%)": 30.3,
+            "Occupancy (%)": 87.88
+          }
+        },
+        "NLSL": {
+          "NT": {
+            "Cars Input": 10,
+            "Cars Output": 0,
+            "Queued Cars Change": 13.0,
+            "Queued Cars": 24.0,
+            "Moving Cars Change": -3,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.25,
+            "Average Waiting Time (mins)": 0.48,
+            "Occupancy Change (%)": 30.3,
+            "Occupancy (%)": 87.88
+          }
+        }
+      },
+      "Best_Signal": "NTST",
+      "sample_id": "6701b1538af85f7c2c819a5345de76094f78b29d5205c17681d2f0254cb95be0"
+    },
+    "complex_level": "easy",
+    "teacher_atr_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|NT|9|0|0(+0)|9(+9)|0.0(+0.0)|27.27(+27.27)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ETWT\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n## Requirement (Strict): You must only use the following reasoning steps:\n- Identify critical lanes\n- Suggest a local traffic signal strategy\n",
+    "ra_user_prompt": "You are now in the **Reactive Action** phase at time step 2.\n\nYour goal is to quickly and accurately select the signal phase to activate at this moment, based on:\n- The prior **Advance Traffic Reasoning (ATR)** conducted at time step 1\n- The **Current Observation** at time step 2\n- The **Local Signal Priority** ranking based on estimated waiting time reduction\n\n---\n\n# Advance Traffic Reasoning (ATR) at time step 1\n\n## Identify Critical Lanes\nLocal Critical Lanes: NT (North Through) - High occupancy (27.27%) and increasing queue (9 cars), currently blocked by ETWT phase.\nNeighboring Critical Lanes: None reported (assumed low occupancy/good state per instructions).\n\n## Reasoning Topic 1: Analysis of Current Signal Effectiveness and Local Queue Buildup\nThe current signal phase is **ETWT** (East/West Through). However, the only lane with reported traffic is **NT** (North Through), which has accumulated 9 queued cars and an occupancy of 27.27% at Timestep 1. Since the signal is serving East-West traffic while North-South traffic is building up, the current phase is ineffective for the existing demand. The waiting time for NT is currently 0.0, but the queue is growing rapidly (+9 cars). If the ETWT phase continues, the NT queue will grow further, potentially leading to upstream congestion or excessive waiting times, violating the principle of not keeping lanes waiting too long when downstream conditions allow.\n\n## Reasoning Topic 2: Downstream Constraint Check for Potential Phase Switch\nTo relieve the NT queue, we must consider switching to a phase that serves NT, such as **NTST** (North/South Through) or **NLSL** (North/South Left). \n- **Downstream Check**: The instructions state that if upstream/downstream information isn't mentioned, they are in a good state with low occupancy. Therefore, the downstream lanes for NT (likely South-bound lanes of the next intersection) are assumed to have low occupancy.\n- **Conclusion**: It is safe to release NT traffic without risking downstream blockage.\n\n## Conditional Signal Suggestions\n\n- **Suggested Signal**: NTST\n    - **Applicable Conditions**: This signal is suitable given the current accumulation of vehicles in the NT lane and the lack of reported traffic in East-West lanes (ET, WT) or other conflicting movements.\n    - **Rationale**: The NT lane has the highest immediate demand (9 queued cars, 27.27% occupancy). Continuing ETWT would ignore this demand and cause unnecessary delay. Switching to NTST allows the clearing of the North Through queue. Since ST (South Through) data is not reported, it is assumed empty or low, so serving NT is the priority. This balances local urgency by addressing the only active queue.\n    - **Expected Effect**: The 9 queued cars in NT will begin to move, reducing occupancy and preventing further queue buildup. Waiting time for NT vehicles will be minimized.\n\n## Summary\nThe current ETWT phase is mismatched with the observed traffic demand, which is concentrated solely in the NT lane. With no downstream congestion risks reported, the optimal strategy is to switch to the **NTST** phase at Timestep 2 to clear the accumulating North Through queue.\n\n---\n\n# Current Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 1 signal: ETWT\nTimestep 2 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|NT|10|0|11(+11)|8(-1)|0.23(+0.23)|57.58(+30.31)|\n\n\n\n---\n\n# Local Signal Priority\nThis rank only considers your own intersection and assumes the downstream allows the release.\n|Rank|Signal|Waiting Time Reduction|\n|1|NTST|12.0 mins|\n|2|ETWT|0.0 mins|\n|3|ELWL|0.0 mins|\n|4|NLSL|0.0 mins|\n\n\n\n---\n\n# Instruction\n\nPlease:\n\n1. Compare the ATR suggestions with the current traffic state.  \n2. If the current situation aligns with ATR predictions, select the recommended signal accordingly.  \n3. If the current situation **deviates** from ATR, make necessary adjustments to respond to new patterns.  \n4. If **upstream/downstream influence is minimal or negligible**, directly select the top-ranked signal from the Local Signal Priority table.  \n5. Do not congest downstream lanes. When the occupancy of Lane X, plus that of any other X's downstream lanes, is close to 100%, you must delay the release of X.\n6. Decide whether the ATR output was **actually useful** in your decision using the `used_atr` flag:  \n   - `used_atr = 1`: The ATR output was referenced and influenced the decision.  \n   - `used_atr = 0`: The decision was made independently of the ATR output.\n\n---\n\n# Output Format\n\nReturn your result in the following **structured JSON format**:\n\n```json\n{\n  \"signal\": \"<Selected signal phase, e.g., ETWT, NTST, NLSL, ELWL>\",\n  \"reason\": \"<Brief justification: why this signal is chosen based on traffic observation, local signal ranking, and (if applicable) the ATR suggestion.>\",\n  \"used_atr\": <0 or 1>\n}\n```",
+    "ra_output": "```json\n{\n  \"signal\": \"NTST\",\n  \"reason\": \"The current observation confirms the ATR prediction: NT occupancy has surged to 57.58% with a queue of 11 cars, while no other lanes show traffic. The Local Signal Priority ranks NTST highest (12.0 mins waiting time reduction). Downstream conditions are assumed clear per instructions. Switching to NTST is necessary to relieve the growing North Through queue and prevent excessive delay.\",\n  \"used_atr\": 1\n}\n```"
+  },
+  {
+    "sample_id": "53a6da29948c4145d3081c472a351d07d69dc4818cb040ac96f4eebeae6b5077",
+    "atr_user_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: NTST\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n",
+    "atr_output": "## Identify Critical Lanes\n\nLocal Critical Lanes: None (No traffic data provided for local lanes NL, NT, NR, SL, ST, SR, EL, ET, ER, WL, WT, WR implies empty or negligible occupancy).\nNeighboring Critical Lanes: None (No upstream/downstream data provided implies good state with low occupancy).\n\n## Suggest a local traffic signal strategy\n\n- **Suggested Signal**: NTST\n    - **Applicable Conditions**: The intersection is currently empty or has negligible traffic volume across all approaches, as indicated by the lack of reported vehicle counts, queue lengths, or waiting times in the observation.\n    - **Rationale**: In the absence of specific congestion or high-demand indicators, maintaining the current phase (NTST) or rotating to a standard through-phase is a safe default. Since no lanes have vehicles, there is no risk of downstream blockage or excessive upstream waiting. The previous phase was ETWT, and the current active phase is NTST. Continuing with NTST allows for the clearance of any potential residual north-south traffic that might have arrived just after the observation window, or simply maintains a stable cycle if traffic is sparse. Alternatively, switching to ELWL or NLSL would be arbitrary without demand data. Sticking to the current phase or a major through-phase is standard practice for low-volume scenarios to ensure readiness for sudden surges in primary directions.\n    - **Expected Effect**: Minimal impact on traffic flow due to low volume. Ensures the signal cycle progresses logically. No risk of congestion propagation as downstream lanes are assumed clear.\n\n## Summary\nThe traffic observation at Timestep 1 shows no active vehicles in any lane. Consequently, there are no critical local or neighboring lanes requiring urgent intervention. The decision defaults to maintaining the current signal phase (NTST) or proceeding with a standard through-movement phase, as there is no evidence to justify prioritizing left turns or east-west movements over north-south movements. Safety and network stability are maintained by avoiding unnecessary phase switches in an empty intersection.",
+    "data": {
+      "Intersection": "intersection_2_3",
+      "Timestep": 2,
+      "Traffic_state_history": [
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        },
+        {
+          "Signal": "NTST",
+          "NT": {
+            "Cars Input": 9,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 9,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 27.27,
+            "Occupancy (%)": 27.27
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NT's upstream lane (7, NT)": {
+            "Cars Input": 10,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 10,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 30.3
+          },
+          "Summary": {
+            "Total Cars Output": 10,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        }
+      ],
+      "Current_Observation": {
+        "empty_lanes": [
+          "NL",
+          "ST",
+          "SL",
+          "ET",
+          "EL",
+          "WT",
+          "WL"
+        ],
+        "non_empty_lanes": {
+          "NT": {
+            "queue_car_num": 0.0,
+            "coming_car_num": 9,
+            "avg_wait_time": 0.0,
+            "occupancy": 27.27272727272727
+          }
+        },
+        "up_down_stream_view": {
+          "exist": true,
+          "NT": {
+            "upstream": {
+              "NT": {
+                "cells": [
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1
+                ],
+                "ql_cells": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "queue_len": 0.0,
+                "out_of_lane": 0,
+                "veh2cell": {
+                  "flow_5276_0": 0,
+                  "flow_697_0": 1,
+                  "flow_2827_0": 2,
+                  "flow_5033_0": 3,
+                  "flow_4746_0": 4,
+                  "flow_6254_0": 5,
+                  "flow_4289_0": 6,
+                  "flow_3912_0": 7,
+                  "flow_4366_0": 8,
+                  "flow_160_0": 9
+                },
+                "avg_wait_time": 0.0,
+                "wait_time": {
+                  "flow_5276_0": 0.0,
+                  "flow_697_0": 0.0,
+                  "flow_2827_0": 0.0,
+                  "flow_5033_0": 0.0,
+                  "flow_4746_0": 0.0,
+                  "flow_6254_0": 0.0,
+                  "flow_4289_0": 0.0,
+                  "flow_3912_0": 0.0,
+                  "flow_4366_0": 0.0,
+                  "flow_160_0": 0.0
+                },
+                "veh2pos": {
+                  "flow_5276_0": 24.465483000000006,
+                  "flow_697_0": 45.155811,
+                  "flow_2827_0": 66.59263100000001,
+                  "flow_5033_0": 97.77950000000001,
+                  "flow_4746_0": 131.1125,
+                  "flow_6254_0": 164.4455,
+                  "flow_4289_0": 197.7785,
+                  "flow_3912_0": 231.1115,
+                  "flow_4366_0": 264.4445,
+                  "flow_160_0": 291.0
+                },
+                "road_length": 300.0,
+                "stay_time": {
+                  "flow_5276_0": 28.0,
+                  "flow_697_0": 25.0,
+                  "flow_2827_0": 22.0,
+                  "flow_5033_0": 19.0,
+                  "flow_4746_0": 16.0,
+                  "flow_6254_0": 13.0,
+                  "flow_4289_0": 10.0,
+                  "flow_3912_0": 7.0,
+                  "flow_4366_0": 4.0,
+                  "flow_160_0": 1.0
+                },
+                "occupancy": 0.30303030303030304,
+                "inter_id": 7
+              }
+            }
+          }
+        },
+        "up_down_stream_interlanes": [
+          [
+            7,
+            "NT"
+          ]
+        ],
+        "long_distance_info": {
+          "NT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "NL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ST": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "SL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ET": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "EL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          }
+        },
+        "memory": {
+          "recent_memory": {
+            "signal": "NTST",
+            "pos": []
+          },
+          "lane_memories": [],
+          "similar_lane_memory": []
+        }
+      },
+      "Signal_Rank": {
+        "ETWT": 0.0,
+        "NTST": 270.0,
+        "ELWL": 0.0,
+        "NLSL": 0.0
+      },
+      "Signal_Consequence": {
+        "ETWT": {
+          "NT": {
+            "Cars Input": 11,
+            "Cars Output": 0,
+            "Queued Cars Change": 14.0,
+            "Queued Cars": 14.0,
+            "Moving Cars Change": -3,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.2,
+            "Average Waiting Time (mins)": 0.2,
+            "Occupancy Change (%)": 33.34,
+            "Occupancy (%)": 60.61
+          },
+          "NT's upstream lane (7, NT)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        },
+        "NTST": {
+          "NT": {
+            "Cars Input": 9,
+            "Cars Output": 9,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 27.27
+          },
+          "NT's upstream lane (7, NT)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        },
+        "ELWL": {
+          "NT": {
+            "Cars Input": 11,
+            "Cars Output": 0,
+            "Queued Cars Change": 14.0,
+            "Queued Cars": 14.0,
+            "Moving Cars Change": -3,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.2,
+            "Average Waiting Time (mins)": 0.2,
+            "Occupancy Change (%)": 33.34,
+            "Occupancy (%)": 60.61
+          },
+          "NT's upstream lane (7, NT)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        },
+        "NLSL": {
+          "NT": {
+            "Cars Input": 11,
+            "Cars Output": 0,
+            "Queued Cars Change": 14.0,
+            "Queued Cars": 14.0,
+            "Moving Cars Change": -3,
+            "Moving Cars": 6,
+            "Average Waiting Time Change (mins)": 0.2,
+            "Average Waiting Time (mins)": 0.2,
+            "Occupancy Change (%)": 33.34,
+            "Occupancy (%)": 60.61
+          },
+          "NT's upstream lane (7, NT)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        }
+      },
+      "Best_Signal": "NTST",
+      "sample_id": "53a6da29948c4145d3081c472a351d07d69dc4818cb040ac96f4eebeae6b5077"
+    },
+    "complex_level": "easy",
+    "teacher_atr_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: NTST\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n## Requirement (Strict): You must only use the following reasoning steps:\n- Identify critical lanes\n- Suggest a local traffic signal strategy\n",
+    "ra_user_prompt": "You are now in the **Reactive Action** phase at time step 2.\n\nYour goal is to quickly and accurately select the signal phase to activate at this moment, based on:\n- The prior **Advance Traffic Reasoning (ATR)** conducted at time step 1\n- The **Current Observation** at time step 2\n- The **Local Signal Priority** ranking based on estimated waiting time reduction\n\n---\n\n# Advance Traffic Reasoning (ATR) at time step 1\n\n## Identify Critical Lanes\n\nLocal Critical Lanes: None (No traffic data provided for local lanes NL, NT, NR, SL, ST, SR, EL, ET, ER, WL, WT, WR implies empty or negligible occupancy).\nNeighboring Critical Lanes: None (No upstream/downstream data provided implies good state with low occupancy).\n\n## Suggest a local traffic signal strategy\n\n- **Suggested Signal**: NTST\n    - **Applicable Conditions**: The intersection is currently empty or has negligible traffic volume across all approaches, as indicated by the lack of reported vehicle counts, queue lengths, or waiting times in the observation.\n    - **Rationale**: In the absence of specific congestion or high-demand indicators, maintaining the current phase (NTST) or rotating to a standard through-phase is a safe default. Since no lanes have vehicles, there is no risk of downstream blockage or excessive upstream waiting. The previous phase was ETWT, and the current active phase is NTST. Continuing with NTST allows for the clearance of any potential residual north-south traffic that might have arrived just after the observation window, or simply maintains a stable cycle if traffic is sparse. Alternatively, switching to ELWL or NLSL would be arbitrary without demand data. Sticking to the current phase or a major through-phase is standard practice for low-volume scenarios to ensure readiness for sudden surges in primary directions.\n    - **Expected Effect**: Minimal impact on traffic flow due to low volume. Ensures the signal cycle progresses logically. No risk of congestion propagation as downstream lanes are assumed clear.\n\n## Summary\nThe traffic observation at Timestep 1 shows no active vehicles in any lane. Consequently, there are no critical local or neighboring lanes requiring urgent intervention. The decision defaults to maintaining the current signal phase (NTST) or proceeding with a standard through-movement phase, as there is no evidence to justify prioritizing left turns or east-west movements over north-south movements. Safety and network stability are maintained by avoiding unnecessary phase switches in an empty intersection.\n\n---\n\n# Current Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 1 signal: NTST\nTimestep 2 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|NT|9|0|0(+0)|9(+9)|0.0(+0.0)|27.27(+27.27)|\n|NT's upstream lane (7, NT)|10|10|0(+0)|10(+0)|0.0(+0.0)|30.3(+0.0)|\n\n\n\n---\n\n# Local Signal Priority\nThis rank only considers your own intersection and assumes the downstream allows the release.\n|Rank|Signal|Waiting Time Reduction|\n|1|NTST|4.5 mins|\n|2|ETWT|0.0 mins|\n|3|ELWL|0.0 mins|\n|4|NLSL|0.0 mins|\n\n\n\n---\n\n# Instruction\n\nPlease:\n\n1. Compare the ATR suggestions with the current traffic state.  \n2. If the current situation aligns with ATR predictions, select the recommended signal accordingly.  \n3. If the current situation **deviates** from ATR, make necessary adjustments to respond to new patterns.  \n4. If **upstream/downstream influence is minimal or negligible**, directly select the top-ranked signal from the Local Signal Priority table.  \n5. Do not congest downstream lanes. When the occupancy of Lane X, plus that of any other X's downstream lanes, is close to 100%, you must delay the release of X.\n6. Decide whether the ATR output was **actually useful** in your decision using the `used_atr` flag:  \n   - `used_atr = 1`: The ATR output was referenced and influenced the decision.  \n   - `used_atr = 0`: The decision was made independently of the ATR output.\n\n---\n\n# Output Format\n\nReturn your result in the following **structured JSON format**:\n\n```json\n{\n  \"signal\": \"<Selected signal phase, e.g., ETWT, NTST, NLSL, ELWL>\",\n  \"reason\": \"<Brief justification: why this signal is chosen based on traffic observation, local signal ranking, and (if applicable) the ATR suggestion.>\",\n  \"used_atr\": <0 or 1>\n}\n```",
+    "ra_output": "```json\n{\n  \"signal\": \"NTST\",\n  \"reason\": \"The current observation shows a sudden influx of 9 vehicles in the NT lane with an occupancy of 27.27%, while the upstream lane is flowing freely (occupancy 30.3%). The Local Signal Priority ranks NTST as the top choice for waiting time reduction (4.5 mins). Since the downstream conditions are assumed clear (no high occupancy reported) and the ATR correctly predicted a low-traffic baseline that allows for standard phase progression, continuing with NTST effectively serves the new demand without risking congestion. The decision aligns with both the priority ranking and the safe default strategy from ATR.\",\n  \"used_atr\": 1\n}\n```"
+  },
+  {
+    "sample_id": "c0e4ec94c90f0633700cf4efc088a98321fa978e32f420db5ec304c07aa0a2ec",
+    "atr_user_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|WL|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ELWL\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n",
+    "atr_output": "## Identify Critical Lanes\nLocal Critical Lanes: None (All lanes except WL have 0 occupancy/queue. WL has low occupancy of 3.03% and is currently being served).\nNeighboring Critical Lanes: None (No upstream or downstream congestion data provided, implying good state).\n\n## Suggest a local traffic signal strategy\n\n- **Suggested Signal**: ELWL\n    - **Applicable Conditions**: The current phase is ELWL, and there is active traffic in the WL lane (1 moving car) with no immediate congestion risks downstream. No other lanes show significant queue buildup requiring urgent intervention.\n    - **Rationale**: Since the current signal phase (ELWL) is already active at Timestep 2 and is effectively serving the only lane with traffic (WL), it is optimal to maintain this phase to clear the existing vehicle. Switching phases prematurely would introduce unnecessary all-red intervals or switch-over delays without benefiting any other congested lanes, as all other queues are empty. The downstream condition is safe (implied low occupancy), so releasing WL poses no risk.\n    - **Expected Effect**: The single moving car in WL will clear the intersection. The phase will complete its remaining duration efficiently. If no new cars arrive in EL/WL by the end of the cycle, the system can then evaluate switching to another phase (like ETWT or NTST) based on new arrivals at Timestep 3.\n\n## Summary\nThe traffic situation is extremely light with only one vehicle present in the WL lane, which is currently being served by the active ELWL phase. There are no congestion risks or critical queues in other lanes. Therefore, the best strategy is to maintain the current ELWL phase to allow the existing traffic to clear safely and efficiently.",
+    "data": {
+      "Intersection": "intersection_1_2",
+      "Timestep": 2,
+      "Traffic_state_history": [
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 3.03
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        },
+        {
+          "Signal": "ELWL",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 5,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 5,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 15.15,
+            "Occupancy (%)": 15.15
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 1,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 0.0
+          },
+          "ST's upstream lane (0, ST)": {
+            "Cars Input": 10,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 10,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 30.3
+          },
+          "WL's downstream lane (2, ST)": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 3.03
+          },
+          "Summary": {
+            "Total Cars Output": 11,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        }
+      ],
+      "Current_Observation": {
+        "empty_lanes": [
+          "NT",
+          "NL",
+          "SL",
+          "ET",
+          "EL",
+          "WT",
+          "WL"
+        ],
+        "non_empty_lanes": {
+          "ST": {
+            "queue_car_num": 0.0,
+            "coming_car_num": 5,
+            "avg_wait_time": 0.0,
+            "occupancy": 15.151515151515152
+          }
+        },
+        "up_down_stream_view": {
+          "exist": true,
+          "ST": {
+            "upstream": {
+              "ST": {
+                "cells": [
+                  0,
+                  2,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1
+                ],
+                "ql_cells": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "queue_len": 0.0,
+                "out_of_lane": 0,
+                "veh2cell": {
+                  "flow_5413_0": 1,
+                  "flow_1976_0": 1,
+                  "flow_6634_0": 2,
+                  "flow_501_0": 3,
+                  "flow_7942_0": 4,
+                  "flow_4509_0": 5,
+                  "flow_2944_0": 6,
+                  "flow_1482_0": 7,
+                  "flow_548_0": 8,
+                  "flow_7249_0": 9
+                },
+                "avg_wait_time": 0.0,
+                "wait_time": {
+                  "flow_5413_0": 0.0,
+                  "flow_1976_0": 0.0,
+                  "flow_6634_0": 0.0,
+                  "flow_501_0": 0.0,
+                  "flow_7942_0": 0.0,
+                  "flow_4509_0": 0.0,
+                  "flow_2944_0": 0.0,
+                  "flow_1482_0": 0.0,
+                  "flow_548_0": 0.0,
+                  "flow_7249_0": 0.0
+                },
+                "veh2pos": {
+                  "flow_5413_0": 31.05377299999998,
+                  "flow_1976_0": 48.83189899999999,
+                  "flow_6634_0": 67.809595,
+                  "flow_501_0": 97.77950000000001,
+                  "flow_7942_0": 131.1125,
+                  "flow_4509_0": 164.4455,
+                  "flow_2944_0": 197.7785,
+                  "flow_1482_0": 231.1115,
+                  "flow_548_0": 264.4445,
+                  "flow_7249_0": 291.0
+                },
+                "road_length": 300.0,
+                "stay_time": {
+                  "flow_5413_0": 28.0,
+                  "flow_1976_0": 25.0,
+                  "flow_6634_0": 22.0,
+                  "flow_501_0": 19.0,
+                  "flow_7942_0": 16.0,
+                  "flow_4509_0": 13.0,
+                  "flow_2944_0": 10.0,
+                  "flow_1482_0": 7.0,
+                  "flow_548_0": 4.0,
+                  "flow_7249_0": 1.0
+                },
+                "occupancy": 0.30303030303030304,
+                "inter_id": 0
+              }
+            }
+          }
+        },
+        "up_down_stream_interlanes": [
+          [
+            0,
+            "ST"
+          ]
+        ],
+        "long_distance_info": {
+          "NT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "NL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ST": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "SL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ET": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "EL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          }
+        },
+        "memory": {
+          "recent_memory": {
+            "signal": "ELWL",
+            "pos": [
+              [
+                "WL",
+                0
+              ]
+            ]
+          },
+          "lane_memories": [
+            {
+              "lane": "WL",
+              "occupancy_before": 0.030303030303030304,
+              "queue_num_before": 0.0,
+              "moving_num_before": 1,
+              "release_results": {
+                "flow_4654_0": null
+              },
+              "let_downstream_over100": false
+            }
+          ],
+          "similar_lane_memory": []
+        }
+      },
+      "Signal_Rank": {
+        "ETWT": 0.0,
+        "NTST": 150.0,
+        "ELWL": 0.0,
+        "NLSL": 0.0
+      },
+      "Signal_Consequence": {
+        "ETWT": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 0,
+            "Queued Cars Change": 6.0,
+            "Queued Cars": 6.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.22,
+            "Average Waiting Time (mins)": 0.22,
+            "Occupancy Change (%)": 18.18,
+            "Occupancy (%)": 33.33
+          },
+          "ST's upstream lane (0, ST)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        },
+        "NTST": {
+          "ST": {
+            "Cars Input": 5,
+            "Cars Output": 5,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 15.15
+          },
+          "ST's upstream lane (0, ST)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        },
+        "ELWL": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 0,
+            "Queued Cars Change": 6.0,
+            "Queued Cars": 6.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.22,
+            "Average Waiting Time (mins)": 0.22,
+            "Occupancy Change (%)": 18.18,
+            "Occupancy (%)": 33.33
+          },
+          "ST's upstream lane (0, ST)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        },
+        "NLSL": {
+          "ST": {
+            "Cars Input": 6,
+            "Cars Output": 0,
+            "Queued Cars Change": 6.0,
+            "Queued Cars": 6.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 5,
+            "Average Waiting Time Change (mins)": 0.22,
+            "Average Waiting Time (mins)": 0.22,
+            "Occupancy Change (%)": 18.18,
+            "Occupancy (%)": 33.33
+          },
+          "ST's upstream lane (0, ST)": {
+            "Cars Input": 9,
+            "Cars Output": 10,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 9,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 27.27
+          }
+        }
+      },
+      "Best_Signal": "NTST",
+      "sample_id": "c0e4ec94c90f0633700cf4efc088a98321fa978e32f420db5ec304c07aa0a2ec"
+    },
+    "complex_level": "easy",
+    "teacher_atr_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|WL|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ELWL\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n## Requirement (Strict): You must only use the following reasoning steps:\n- Identify critical lanes\n- Suggest a local traffic signal strategy\n",
+    "ra_user_prompt": "You are now in the **Reactive Action** phase at time step 2.\n\nYour goal is to quickly and accurately select the signal phase to activate at this moment, based on:\n- The prior **Advance Traffic Reasoning (ATR)** conducted at time step 1\n- The **Current Observation** at time step 2\n- The **Local Signal Priority** ranking based on estimated waiting time reduction\n\n---\n\n# Advance Traffic Reasoning (ATR) at time step 1\n\n## Identify Critical Lanes\nLocal Critical Lanes: None (All lanes except WL have 0 occupancy/queue. WL has low occupancy of 3.03% and is currently being served).\nNeighboring Critical Lanes: None (No upstream or downstream congestion data provided, implying good state).\n\n## Suggest a local traffic signal strategy\n\n- **Suggested Signal**: ELWL\n    - **Applicable Conditions**: The current phase is ELWL, and there is active traffic in the WL lane (1 moving car) with no immediate congestion risks downstream. No other lanes show significant queue buildup requiring urgent intervention.\n    - **Rationale**: Since the current signal phase (ELWL) is already active at Timestep 2 and is effectively serving the only lane with traffic (WL), it is optimal to maintain this phase to clear the existing vehicle. Switching phases prematurely would introduce unnecessary all-red intervals or switch-over delays without benefiting any other congested lanes, as all other queues are empty. The downstream condition is safe (implied low occupancy), so releasing WL poses no risk.\n    - **Expected Effect**: The single moving car in WL will clear the intersection. The phase will complete its remaining duration efficiently. If no new cars arrive in EL/WL by the end of the cycle, the system can then evaluate switching to another phase (like ETWT or NTST) based on new arrivals at Timestep 3.\n\n## Summary\nThe traffic situation is extremely light with only one vehicle present in the WL lane, which is currently being served by the active ELWL phase. There are no congestion risks or critical queues in other lanes. Therefore, the best strategy is to maintain the current ELWL phase to allow the existing traffic to clear safely and efficiently.\n\n---\n\n# Current Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 1 signal: ELWL\nTimestep 2 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|ST|5|0|0(+0)|5(+5)|0.0(+0.0)|15.15(+15.15)|\n|WL|0|1|0(+0)|0(-1)|0.0(+0.0)|0.0(-3.03)|\n|ST's upstream lane (0, ST)|10|10|0(+0)|10(+0)|0.0(+0.0)|30.3(+0.0)|\n|WL's downstream lane (2, ST)|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n\n\n\n---\n\n# Local Signal Priority\nThis rank only considers your own intersection and assumes the downstream allows the release.\n|Rank|Signal|Waiting Time Reduction|\n|1|NTST|2.5 mins|\n|2|ETWT|0.0 mins|\n|3|ELWL|0.0 mins|\n|4|NLSL|0.0 mins|\n\n\n\n---\n\n# Instruction\n\nPlease:\n\n1. Compare the ATR suggestions with the current traffic state.  \n2. If the current situation aligns with ATR predictions, select the recommended signal accordingly.  \n3. If the current situation **deviates** from ATR, make necessary adjustments to respond to new patterns.  \n4. If **upstream/downstream influence is minimal or negligible**, directly select the top-ranked signal from the Local Signal Priority table.  \n5. Do not congest downstream lanes. When the occupancy of Lane X, plus that of any other X's downstream lanes, is close to 100%, you must delay the release of X.\n6. Decide whether the ATR output was **actually useful** in your decision using the `used_atr` flag:  \n   - `used_atr = 1`: The ATR output was referenced and influenced the decision.  \n   - `used_atr = 0`: The decision was made independently of the ATR output.\n\n---\n\n# Output Format\n\nReturn your result in the following **structured JSON format**:\n\n```json\n{\n  \"signal\": \"<Selected signal phase, e.g., ETWT, NTST, NLSL, ELWL>\",\n  \"reason\": \"<Brief justification: why this signal is chosen based on traffic observation, local signal ranking, and (if applicable) the ATR suggestion.>\",\n  \"used_atr\": <0 or 1>\n}\n```",
+    "ra_output": "```json\n{\n  \"signal\": \"NTST\",\n  \"reason\": \"The traffic situation has deviated significantly from the ATR prediction. While ATR suggested maintaining ELWL due to low traffic, the Current Observation shows that the WL lane is now empty (0 cars) and a new queue of 5 cars has formed in the ST lane. The Local Signal Priority ranks NTST as the top choice for waiting time reduction. Since the downstream occupancy for ST's direction is not indicated as critical (only WL's downstream is shown with low occupancy), and ST has active queued traffic, it is optimal to switch to NTST to serve the ST lane and reduce waiting times.\",\n  \"used_atr\": 0\n}\n```"
+  },
+  {
+    "sample_id": "d51539653bab5b5f7026a966bd685bee7bed096df2c529b4622043ddd9d19bc7",
+    "atr_user_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ETWT\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n",
+    "atr_output": "## Identify Critical Lanes\nLocal Critical Lanes: None (No traffic data provided for local lanes NL, NT, SL, ST, EL, ET, WL, WT implies empty or free-flowing conditions).\nNeighboring Critical Lanes: None (No upstream/downstream occupancy data provided implies good state with low occupancy).\n\n## Suggest a local traffic signal strategy\n- **Suggested Signal**: ETWT\n    - **Applicable Conditions**: The current observation shows no queued cars, no moving cars, and no waiting time for any lane. This indicates the intersection is currently empty or traffic demand is negligible.\n    - **Rationale**: Since the previous signal phase was ETWT and there is no evidence of congestion or accumulation in any lane (local or neighboring), maintaining the current phase is a safe default. It avoids unnecessary switching overhead when there is no traffic to serve. Alternatively, any phase could be chosen as the impact is null, but sticking to the current phase minimizes control churn.\n    - **Expected Effect**: The intersection remains clear. If any sparse traffic arrives from East or West, it will be served immediately. No congestion will be generated as downstream conditions are assumed good.\n\n## Summary\nThe traffic state is effectively empty based on the provided observations. There are no critical lanes requiring urgent service. The recommended action is to maintain the current signal phase (ETWT) or switch arbitrarily without risk, as no queues exist to manage.",
+    "data": {
+      "Intersection": "intersection_3_2",
+      "Timestep": 2,
+      "Traffic_state_history": [
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "Summary": {
+            "Total Cars Output": 0,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        },
+        {
+          "Signal": "ETWT",
+          "NT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "NL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ST": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "SL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "ET": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "EL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 3.03
+          },
+          "WL": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 0.0
+          },
+          "WT's upstream lane (4, ST)": {
+            "Cars Input": 0,
+            "Cars Output": 1,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 3.03
+          },
+          "Summary": {
+            "Total Cars Output": 1,
+            "Over Occupancy": false,
+            "Average Queued Length": 0.0,
+            "Max Average Waiting Time": 0
+          }
+        }
+      ],
+      "Current_Observation": {
+        "empty_lanes": [
+          "NT",
+          "NL",
+          "ST",
+          "SL",
+          "ET",
+          "EL",
+          "WL"
+        ],
+        "non_empty_lanes": {
+          "WT": {
+            "queue_car_num": 0.0,
+            "coming_car_num": 1,
+            "avg_wait_time": 0.0,
+            "occupancy": 3.0303030303030303
+          }
+        },
+        "up_down_stream_view": {
+          "exist": true,
+          "WT": {
+            "upstream": {
+              "ST": {
+                "cells": [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "ql_cells": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "queue_len": 0.0,
+                "out_of_lane": 0,
+                "veh2cell": {
+                  "flow_5474_0": 0
+                },
+                "avg_wait_time": 0.0,
+                "wait_time": {
+                  "flow_5474_0": 0.0
+                },
+                "veh2pos": {
+                  "flow_5474_0": 11.437770999999998
+                },
+                "road_length": 300.0,
+                "stay_time": {
+                  "flow_5474_0": 30.0
+                },
+                "occupancy": 0.030303030303030304,
+                "inter_id": 4
+              }
+            }
+          }
+        },
+        "up_down_stream_interlanes": [
+          [
+            4,
+            "ST"
+          ]
+        ],
+        "long_distance_info": {
+          "NT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "NL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ST": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "SL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "ET": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "EL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WT": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          },
+          "WL": {
+            "upstream": {
+              "exist": false
+            },
+            "downstream": {
+              "exist": false
+            },
+            "exist": []
+          }
+        },
+        "memory": {
+          "recent_memory": {
+            "signal": "ETWT",
+            "pos": []
+          },
+          "lane_memories": [],
+          "similar_lane_memory": []
+        }
+      },
+      "Signal_Rank": {
+        "ETWT": 30.0,
+        "NTST": 0.0,
+        "ELWL": 0.0,
+        "NLSL": 0.0
+      },
+      "Signal_Consequence": {
+        "ETWT": {
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 1,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": -1,
+            "Moving Cars": 0,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": -3.03,
+            "Occupancy (%)": 0.0
+          },
+          "WT's upstream lane (4, ST)": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.5,
+            "Average Waiting Time (mins)": 0.5,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 6.06
+          }
+        },
+        "NTST": {
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          },
+          "WT's upstream lane (4, ST)": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.5,
+            "Average Waiting Time (mins)": 0.5,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 6.06
+          }
+        },
+        "ELWL": {
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          },
+          "WT's upstream lane (4, ST)": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.5,
+            "Average Waiting Time (mins)": 0.5,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 6.06
+          }
+        },
+        "NLSL": {
+          "WT": {
+            "Cars Input": 0,
+            "Cars Output": 0,
+            "Queued Cars Change": 0.0,
+            "Queued Cars": 0.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.0,
+            "Average Waiting Time (mins)": 0.0,
+            "Occupancy Change (%)": 0.0,
+            "Occupancy (%)": 3.03
+          },
+          "WT's upstream lane (4, ST)": {
+            "Cars Input": 1,
+            "Cars Output": 0,
+            "Queued Cars Change": 1.0,
+            "Queued Cars": 1.0,
+            "Moving Cars Change": 0,
+            "Moving Cars": 1,
+            "Average Waiting Time Change (mins)": 0.5,
+            "Average Waiting Time (mins)": 0.5,
+            "Occupancy Change (%)": 3.03,
+            "Occupancy (%)": 6.06
+          }
+        }
+      },
+      "Best_Signal": "ETWT",
+      "sample_id": "d51539653bab5b5f7026a966bd685bee7bed096df2c529b4622043ddd9d19bc7"
+    },
+    "complex_level": "easy",
+    "teacher_atr_prompt": "You are now in the **Advance Traffic Reasoning** phase (at time step 1).\n\nYour goal is to perform deep but adaptive reasoning based on historical and current traffic conditions. This reasoning will guide the signal decision for the next time step 2.\n\n---\n\n## Historical Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 0 signal: ETWT\nTimestep 1 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n\n\n\n---\n\n## Current Observation\nTimestep 2 signal: ETWT\n\n\n\n---\n\n## Instruction\nPlease proceed through the following steps:\n### Step 1: Identify Critical Lanes\nExamine the current intersection and its upstream/downstream neighbors to identify critical local and neighboring lanes that are critical or congested and require attention; output as:\nLocal Critical Lanes: ...\nNeighboring Critical Lanes: ...\n\n### Step 2: Perform Adaptive Reasoning\nSelect and apply only the **necessary reasoning steps** to support an effective and fast decision at the next time step 2.\n\nSuggested reasoning topics include (but are not limited to):  \n- Local queue and waiting time analysis\n- Upstream/downstream traffic influence\n- Reflection on previous signal effectiveness\n- Prediction of the traffic state at timestep 2\n- Anticipated effects of activating specific signal phases (e.g., NTST, ETWT, NLSL, ELWL) at 2\n\n### Step 3: Conditional Signal Suggestions\nProvide one or more signal strategies that may be appropriate at time step 2.  \nFor each **suggested signal**, specify the situations under which it would be effective, including reasoning and expected effects.\n\nStructure each strategy as:\n\n- **Suggested Signal**: The signal phase that may be activated at time step 2  \n    - **Applicable Conditions**: What kind of traffic pattern or development this signal is suitable for\n    - **Rationale**: Why this signal is an appropriate choice under those conditions  \n    - **Expected Effect**: The anticipated outcome if this signal is activated\n\n### Step 4: Summary\n\n## Notes\n- Your reasoning should be adaptive: longer and deeper if traffic conditions are complex, shorter if simple.\n- You may skip Steps 2 and 3 if the scenario is simple—for example, when there are no critical neighboring lanes.\n\n## Output Format  \nYour output should follow the structure below:\n\n## Identify Critical Lanes\n\n## Reasoning Topic 1\n\n## Reasoning Topic 2\n\n...\n\n## Conditional Signal Suggestions\n\n## Summary\n## Requirement (Strict): You must only use the following reasoning steps:\n- Identify critical lanes\n- Suggest a local traffic signal strategy\n",
+    "ra_user_prompt": "You are now in the **Reactive Action** phase at time step 2.\n\nYour goal is to quickly and accurately select the signal phase to activate at this moment, based on:\n- The prior **Advance Traffic Reasoning (ATR)** conducted at time step 1\n- The **Current Observation** at time step 2\n- The **Local Signal Priority** ranking based on estimated waiting time reduction\n\n---\n\n# Advance Traffic Reasoning (ATR) at time step 1\n\n## Identify Critical Lanes\nLocal Critical Lanes: None (No traffic data provided for local lanes NL, NT, SL, ST, EL, ET, WL, WT implies empty or free-flowing conditions).\nNeighboring Critical Lanes: None (No upstream/downstream occupancy data provided implies good state with low occupancy).\n\n## Suggest a local traffic signal strategy\n- **Suggested Signal**: ETWT\n    - **Applicable Conditions**: The current observation shows no queued cars, no moving cars, and no waiting time for any lane. This indicates the intersection is currently empty or traffic demand is negligible.\n    - **Rationale**: Since the previous signal phase was ETWT and there is no evidence of congestion or accumulation in any lane (local or neighboring), maintaining the current phase is a safe default. It avoids unnecessary switching overhead when there is no traffic to serve. Alternatively, any phase could be chosen as the impact is null, but sticking to the current phase minimizes control churn.\n    - **Expected Effect**: The intersection remains clear. If any sparse traffic arrives from East or West, it will be served immediately. No congestion will be generated as downstream conditions are assumed good.\n\n## Summary\nThe traffic state is effectively empty based on the provided observations. There are no critical lanes requiring urgent service. The recommended action is to maintain the current signal phase (ETWT) or switch arbitrarily without risk, as no queues exist to manage.\n\n---\n\n# Current Observation\n- Lanes include both signal-controlled lanes at the current intersection (e.g., NL, NT, SL, ST, EL, ET, WL, WT) and upstream/downstream lanes from neighboring intersections (e.g., SL's upstream lane (4, ST)). **Only lanes with vehicles are shown.**\n- Values are shown as: value or value(+change from previous timestep).\n\nTimestep 1 signal: ETWT\nTimestep 2 traffic states:\n|Lane|Cars Input|Cars Output|Queued Cars|Moving Cars|Average Waiting Time (mins)|Occupancy (%)|\n|WT|1|0|0(+0)|1(+1)|0.0(+0.0)|3.03(+3.03)|\n|WT's upstream lane (4, ST)|0|1|0(+0)|1(-1)|0.0(+0.0)|3.03(-3.03)|\n\n\n\n---\n\n# Local Signal Priority\nThis rank only considers your own intersection and assumes the downstream allows the release.\n|Rank|Signal|Waiting Time Reduction|\n|1|ETWT|0.5 mins|\n|2|NTST|0.0 mins|\n|3|ELWL|0.0 mins|\n|4|NLSL|0.0 mins|\n\n\n\n---\n\n# Instruction\n\nPlease:\n\n1. Compare the ATR suggestions with the current traffic state.  \n2. If the current situation aligns with ATR predictions, select the recommended signal accordingly.  \n3. If the current situation **deviates** from ATR, make necessary adjustments to respond to new patterns.  \n4. If **upstream/downstream influence is minimal or negligible**, directly select the top-ranked signal from the Local Signal Priority table.  \n5. Do not congest downstream lanes. When the occupancy of Lane X, plus that of any other X's downstream lanes, is close to 100%, you must delay the release of X.\n6. Decide whether the ATR output was **actually useful** in your decision using the `used_atr` flag:  \n   - `used_atr = 1`: The ATR output was referenced and influenced the decision.  \n   - `used_atr = 0`: The decision was made independently of the ATR output.\n\n---\n\n# Output Format\n\nReturn your result in the following **structured JSON format**:\n\n```json\n{\n  \"signal\": \"<Selected signal phase, e.g., ETWT, NTST, NLSL, ELWL>\",\n  \"reason\": \"<Brief justification: why this signal is chosen based on traffic observation, local signal ranking, and (if applicable) the ATR suggestion.>\",\n  \"used_atr\": <0 or 1>\n}\n```",
+    "ra_output": "```json\n{\n  \"signal\": \"ETWT\",\n  \"reason\": \"The current observation shows minimal traffic activity, with only one moving vehicle in the WT lane and no queued cars. This aligns perfectly with the ATR prediction of an empty or free-flowing intersection. The Local Signal Priority ranks ETWT as the top choice for waiting time reduction. Since downstream occupancy is low (3.03%) and there are no congestion risks, maintaining the ETWT phase is optimal to serve the existing westbound traffic without unnecessary switching.\",\n  \"used_atr\": 1\n}\n```"
+  }
+]
