@@ -1,3 +1,4 @@
+from .baseline_archive import archive_algorithm
 import copy
 import numpy as np
 import time
@@ -15,19 +16,21 @@ def merge(dic_tmp, dic_to_change):
     dic_result.update(dic_to_change)
     return dic_result
 
+@archive_algorithm
 def pipeline_wrapper(dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow):
     from .pipeline import Pipeline
     from . import config
-    import wandb
+    from .local_tracking import wandb
     results_table = []
     all_rewards = []
     all_queue_len = []
     all_travel_time = []
     for i in range(1):
-        dic_path["PATH_TO_MODEL"] = (dic_path["PATH_TO_MODEL"].split(".")[0] + ".json" +
-                                     time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
-        dic_path["PATH_TO_WORK_DIRECTORY"] = (dic_path["PATH_TO_WORK_DIRECTORY"].split(".")[0] + ".json" +
-                                              time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
+        if not dic_path.get("EXPERIMENT_DIR"):
+            dic_path["PATH_TO_MODEL"] = (dic_path["PATH_TO_MODEL"].split(".")[0] + ".json" +
+                                         time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
+            dic_path["PATH_TO_WORK_DIRECTORY"] = (dic_path["PATH_TO_WORK_DIRECTORY"].split(".")[0] + ".json" +
+                                                  time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
         ppl = Pipeline(dic_agent_conf=dic_agent_conf,
                        dic_traffic_env_conf=dic_traffic_env_conf,
                        dic_path=dic_path,
@@ -39,11 +42,7 @@ def pipeline_wrapper(dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, tr
         all_queue_len.append(round_results['test_avg_queue_len_over'])
         all_travel_time.append(round_results['test_avg_travel_time_over'])
 
-        # delete junk
-        cmd_delete_model = 'find <dir> -type f ! -name "round_<round>_inter_*.h5" -exec rm -rf {} \;'.replace("<dir>", dic_path["PATH_TO_MODEL"]).replace("<round>", str(int(dic_traffic_env_conf["NUM_ROUNDS"] - 1)))
-        cmd_delete_work = 'find <dir> -type f ! -name "state_action.json" -exec rm -rf {} \;'.replace("<dir>", dic_path["PATH_TO_WORK_DIRECTORY"])
-        os.system(cmd_delete_model)
-        os.system(cmd_delete_work)
+        # Retain archived models and raw records for later evaluation.
 
     results_table.append([np.average(all_rewards), np.average(all_queue_len), np.average(all_travel_time)])
     results_table.append([np.std(all_rewards), np.std(all_queue_len), np.std(all_travel_time)])
@@ -62,19 +61,21 @@ def pipeline_wrapper(dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, tr
     print("pipeline_wrapper end")
     return
 
+@archive_algorithm
 def oneline_wrapper(dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow):
     from .oneline import OneLine
     from . import config
-    import wandb
+    from .local_tracking import wandb
     results_table = []
     all_rewards = []
     all_queue_len = []
     all_travel_time = []
     for i in range(1):
-        dic_path["PATH_TO_MODEL"] = (dic_path["PATH_TO_MODEL"].split(".")[0] + ".json" +
-                                     time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
-        dic_path["PATH_TO_WORK_DIRECTORY"] = (dic_path["PATH_TO_WORK_DIRECTORY"].split(".")[0] + ".json" +
-                                              time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
+        if not dic_path.get("EXPERIMENT_DIR"):
+            dic_path["PATH_TO_MODEL"] = (dic_path["PATH_TO_MODEL"].split(".")[0] + ".json" +
+                                         time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
+            dic_path["PATH_TO_WORK_DIRECTORY"] = (dic_path["PATH_TO_WORK_DIRECTORY"].split(".")[0] + ".json" +
+                                                  time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time())))
         oneline = OneLine(dic_agent_conf=dic_agent_conf,
                           dic_traffic_env_conf=merge(config.dic_traffic_env_conf, dic_traffic_env_conf),
                           dic_path=merge(config.DIC_PATH, dic_path),
@@ -88,11 +89,7 @@ def oneline_wrapper(dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, tra
         all_queue_len.append(round_results['test_avg_queue_len_over'])
         all_travel_time.append(round_results['test_avg_travel_time_over'])
 
-        # delete junk
-        cmd_delete_model = 'rm -rf <dir>'.replace("<dir>", dic_path["PATH_TO_MODEL"])
-        cmd_delete_work = 'find <dir> -type f ! -name "state_action.json" -exec rm -rf {} \;'.replace("<dir>", dic_path["PATH_TO_WORK_DIRECTORY"])
-        os.system(cmd_delete_model)
-        os.system(cmd_delete_work)
+        # Retain archived models and raw records for later evaluation.
 
     results_table.append([np.average(all_rewards), np.average(all_queue_len), np.average(all_travel_time)])
     results_table.append([np.std(all_rewards), np.std(all_queue_len), np.std(all_travel_time)])

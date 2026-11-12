@@ -61,7 +61,7 @@ def lora_for(cfg, stage):
     return LoraConfig(task_type='CAUSAL_LM', r=cfg[f'{stage}_LORA_RANK'],
                       lora_alpha=cfg[f'{stage}_LORA_ALPHA'],
                       lora_dropout=cfg[f'{stage}_LORA_DROPOUT'],
-                      target_modules=targets if targets == 'all-linear' else targets.split(','))
+                      target_modules=None if targets == 'auto' else (targets if targets == 'all-linear' else targets.split(',')))
 
 
 def query_ids(tokenizer, system, prompt, max_length, reserve):
@@ -79,7 +79,7 @@ def versions(cfg):
         report[name] = importlib.metadata.version(name)
     report['cuda'] = torch.version.cuda
     report['gpu'] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
-    atomic_json(cfg.out / 'versions.json', report)
+    cfg.report('versions.json', report)
 
 
 def trainable_snapshot(model):
@@ -93,3 +93,16 @@ def weight_change(model, before):
     if not any('lora_' in n for n in changed):
         raise RuntimeError('No LoRA weights changed')
     return changed
+
+
+def frozen_fingerprint(model):
+    """Hash frozen parameter storage in bounded chunks, without a full model copy."""
+    import hashlib
+    h=hashlib.sha256()
+    for name,p in model.named_parameters():
+        if p.requires_grad:continue
+        h.update(name.encode())
+        flat=p.detach().reshape(-1)
+        for chunk in flat.split(4*1024*1024):
+            h.update(chunk.contiguous().cpu().view(torch.uint8).numpy().tobytes())
+    return h.hexdigest()

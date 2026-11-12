@@ -9,14 +9,10 @@ import os
 import time
 from multiprocessing import Process
 import numpy as np
-import wandb
+from .local_tracking import wandb
 import copy
 import pickle
 from utils.cityflow_env import CityFlowEnv
-from transformers import AutoTokenizer, pipeline
-from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer, create_reference_model
-from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer, DataCollatorForSeq2Seq
-from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_int8_training
 from tqdm import tqdm
 import torch
 from copy import deepcopy
@@ -200,7 +196,10 @@ class Pipeline:
             results, state_action_log = model_test.test(self.dic_path["PATH_TO_MODEL"], self.dic_path["PATH_TO_DATA"],
                                                         cnt_round,
                                                         self.dic_traffic_env_conf["RUN_COUNTS"],
-                                                        self.dic_traffic_env_conf, logger)
+                                                        self.dic_traffic_env_conf, logger, records_dir=self.dic_path["PATH_TO_WORK_DIRECTORY"])
+            if self.dic_path.get('EXPERIMENT_DIR'):
+                from utils.experiment import append_jsonl
+                append_jsonl(os.path.join(self.dic_path['EXPERIMENT_DIR'],'metrics','traffic.jsonl'),{'round':cnt_round,**results})
             if cnt_round + 1 > self.dic_traffic_env_conf["NUM_ROUNDS"] - 10:
                 for ele in last_10_results:
                     last_10_results[ele].append(results[ele])

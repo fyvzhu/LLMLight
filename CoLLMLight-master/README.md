@@ -1,6 +1,6 @@
 # CoLLMLight: Cooperative Large Language Model Agents for Network-Wide Traffic Signal Control
 
-> 本工作区的统一训练/导出/CityFlow 测试流程见 [TRAINING.md](TRAINING.md)。教师与学生参数保留在 `.env`，训练与测试参数见 `config/config.yaml`；最佳完整模型位于 `outputs/<run_name>/trained_best_model/`。下文原版示例作历史参考，当前入口以 TRAINING.md 为准。
+> 本工作区训练入口已迁移为 `training/collmlight/train_collmlight.py`；通过 `config/config.yaml` 的 `training.enable_ppo` 选择仅SFT或SFT＋PPO。`run_CoLLMlight.py` 只做CityFlow评测。新产物按算法/独立实验归档，完整模型位于该实验的 `models/trained_best_model/`。实际命令、环境与限制见 [TRAINING.md](TRAINING.md)，下文原版命令仅作历史参考。
 
 Official implementation for **CoLLMLight**, accepted by ICLR 2026.
 

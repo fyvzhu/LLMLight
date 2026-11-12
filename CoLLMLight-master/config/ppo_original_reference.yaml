@@ -1,0 +1,17 @@
+# 仅作原仓库参数对照；不是可直接运行的配置，不会被默认入口加载。
+# 用户扩容后再合并到实际配置；当前测试不使用原版batch32/100轮。
+num_epochs: 100
+batch_size: 32
+mini_batch_size: 2
+gradient_accumulation_steps: 16
+optimization_epochs: 2
+learning_rate: 1.0e-5
+eval_ratio: 0.1
+max_new_tokens: 2048
+max_model_len: 8192
+lora_rank: 8
+lora_alpha: 16
+lora_dropout: 0
+quantization_bits: 4
+whiten_rewards: true
+checkpoint_strategy: epoch

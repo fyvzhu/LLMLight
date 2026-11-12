@@ -6,7 +6,7 @@ from .pipeline import path_check, copy_cityflow_file, copy_conf_file
 import os
 import time
 import numpy as np
-import wandb
+from .local_tracking import wandb
 from tqdm import tqdm
 import datetime
 import threading
@@ -204,7 +204,12 @@ class OneLine:
             "test_queuing_vehicle_num_over": np.sum(queue_length_episode) if len(queue_length_episode) > 0 else 0,
             "test_avg_waiting_time_over": np.mean(waiting_time_episode) if len(queue_length_episode) > 0 else 0,
             "test_avg_travel_time_over": total_travel_time}
-        with open('./results/latest_results/{}.txt'.format(self.out_file_name), 'w') as f:
+        from pathlib import Path
+        report_dir=Path(self.dic_path.get('EXPERIMENT_DIR',self.dic_path['PATH_TO_WORK_DIRECTORY']))/'reports'
+        report_dir.mkdir(parents=True,exist_ok=True)
+        from utils.experiment import append_jsonl
+        append_jsonl(report_dir.parent/'metrics/traffic.jsonl',{'round':round,**results})
+        with open(report_dir/(self.out_file_name+'.txt'), 'w') as f:
             for key, value in results.items():
                 f.write(f"{key}: {value}\n")
         logger.log(results)

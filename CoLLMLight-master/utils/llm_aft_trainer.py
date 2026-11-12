@@ -1,14 +1,16 @@
+from pathlib import Path
+from utils.baseline_archive import standalone_paths
 from utils.my_utils import load_json, dump_json, get_state_detail, state2text, getPrompt, action2code, code2action, eight_phase_list, four_phase_list, torch_gc, getNCPrompt
 import os
 import time
 import numpy as np
-import wandb
+from .local_tracking import wandb
 from utils.cityflow_env import CityFlowEnv
 import utils.config as config
 from utils.aft_rank_loss_utils import *
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer, create_reference_model
-from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_int8_training
+from peft import LoraConfig, get_peft_model, PeftModel
 from torch.optim.lr_scheduler import StepLR
 from datasets import load_dataset, Dataset
 from tqdm import tqdm
@@ -20,7 +22,6 @@ import shutil
 import copy
 import random
 import datetime
-from vllm import LLM, SamplingParams
 
 def merge(dic_tmp, dic_to_change):
     dic_result = copy.deepcopy(dic_tmp)
@@ -62,6 +63,7 @@ def copy_cityflow_file(dic_path, dic_traffic_env_conf, path=None):
 
 class LLM_CGPR_Collector:
     def __init__(self, dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow):
+        dic_agent_conf,dic_path=standalone_paths(dic_agent_conf,dic_traffic_env_conf,dic_path)
         self.dic_agent_conf = dic_agent_conf
         self.dic_traffic_env_conf = dic_traffic_env_conf
         self.dic_path = dic_path
@@ -81,7 +83,7 @@ class LLM_CGPR_Collector:
         self.trainer_built = False
         self.trainer = None
         self.device = None
-        self.fail_log_file = f"./fails/{self.dic_agent_conf['LLM_MODEL']}-{self.dic_traffic_env_conf['TRAFFIC_FILE']}-{self.dic_traffic_env_conf['ROADNET_FILE']}.json"
+        self.fail_log_file = str(Path(self.dic_path['EXPERIMENT_DIR'])/'reports/failures.json')
         self.fail_logs = []
         self.data_buffer = []
         self.initialize()
@@ -357,6 +359,7 @@ class LLM_CGPR_Collector:
 
 class LLM_CGPR_Trainer:
     def __init__(self, dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow):
+        dic_agent_conf,dic_path=standalone_paths(dic_agent_conf,dic_traffic_env_conf,dic_path)
         self.dic_agent_conf = dic_agent_conf
         self.dic_traffic_env_conf = dic_traffic_env_conf
         self.dic_path = dic_path
@@ -376,7 +379,7 @@ class LLM_CGPR_Trainer:
         self.trainer_built = False
         self.trainer = None
         self.device = None
-        self.fail_log_file = f"./fails/{self.dic_agent_conf['LLM_MODEL']}-{self.dic_traffic_env_conf['TRAFFIC_FILE']}-{self.dic_traffic_env_conf['ROADNET_FILE']}.json"
+        self.fail_log_file = str(Path(self.dic_path['EXPERIMENT_DIR'])/'reports/failures.json')
         self.fail_logs = []
         self.initialize()
 
@@ -642,6 +645,7 @@ class LLM_CGPR_Trainer:
 
 class LLM_Inference:
     def __init__(self, dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow):
+        dic_agent_conf,dic_path=standalone_paths(dic_agent_conf,dic_traffic_env_conf,dic_path)
         self.dic_agent_conf = dic_agent_conf
         self.dic_traffic_env_conf = dic_traffic_env_conf
         
@@ -661,7 +665,7 @@ class LLM_Inference:
         self.trainer_built = False
         self.trainer = None
         self.device = "cuda"
-        self.fail_log_file = f"./fails/{self.dic_agent_conf['LLM_MODEL']}-{self.dic_traffic_env_conf['TRAFFIC_FILE']}-{self.dic_traffic_env_conf['ROADNET_FILE']}.json"
+        self.fail_log_file = str(Path(self.dic_path['EXPERIMENT_DIR'])/'reports/failures.json')
         self.fail_logs = []
         self.initialize()
 
@@ -701,6 +705,7 @@ class LLM_Inference:
         #     "pad_token_id": self.tokenizer.pad_token_id,
         #     "eos_token_id": terminators
         # }
+        from vllm import LLM, SamplingParams
         self.sampling_params = SamplingParams(temperature=0.1, top_p=0.95, top_k=50, stop_token_ids = [128001, 128009], max_tokens= self.dic_agent_conf["NEW_MAX_TOKENS"])
         self.llm_model = LLM(model=llm_path,trust_remote_code=True,gpu_memory_utilization=0.8, tensor_parallel_size=2) 
 
@@ -852,7 +857,7 @@ class LLM_Inference:
         self.memo = self.dic_agent_conf['LLM_MODEL']
         self.dataset_name = self.dic_traffic_env_conf['TRAFFIC_FILE'].replace('.json', '')
         self.out_file_name = f"{self.memo}-{self.dataset_name}-{timestamp}"
-        with open('./results/latest_results/{}.txt'.format(self.out_file_name), 'w') as f:
+        with open(Path(self.dic_path['EXPERIMENT_DIR'])/'reports/summary.txt', 'w') as f:
             for key, value in results.items():
                 f.write(f"{key}: {value}\n")
         print("Test Round:", test_round, results)

@@ -1,3 +1,15 @@
+# TensorFlow 2.8 generated protobuf descriptors require the Python implementation
+# with the existing newer protobuf package. Set before importing the TF agents.
+import os
+import sys
+from pathlib import Path
+_tf_compat=Path(__file__).resolve().parents[1]/'.venv/compat/tensorflow28'
+if (_tf_compat/'google/protobuf').is_dir():
+    loaded=sys.modules.get('google.protobuf')
+    if loaded is not None and getattr(loaded,'__version__','')!='3.20.3':
+        raise RuntimeError('Run legacy RL in a fresh process so its isolated protobuf can load before TensorFlow')
+    sys.path.insert(0,str(_tf_compat))
+os.environ.setdefault('PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION','python')
 from models.random_agent import RandomAgent
 from models.fixedtime_agent import FixedtimeAgent
 from models.maxpressure_agent import MaxPressureAgent

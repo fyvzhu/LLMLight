@@ -1,3 +1,4 @@
+from pathlib import Path
 from utils.my_utils import *
 from utils.utils import *
 from models.CoLLMLightAgent import *
@@ -14,6 +15,17 @@ from collections import defaultdict
 
 class FTS:
     def __init__(self, dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow, my_config):
+        if not my_config.get('evaluation_dir'):
+            from utils.training_config import TrainingConfig,atomic_json,read_json
+            from utils.experiment import create_run
+            cfg=TrainingConfig(overrides={'RUN_NAME':my_config.get('memo','sampling'),'ALGORITHM':'CoLLMLight','ENABLE_PPO':False,'DATA_PREPARATION':'sample_and_generate'})
+            folder=create_run(cfg)
+            dic_path=dict(dic_path,PATH_TO_MODEL=str(folder/'models/sampling'),PATH_TO_WORK_DIRECTORY=str(folder/'records/sampling'),EXPERIMENT_DIR=str(folder))
+            my_config=dict(my_config,evaluation_dir=str(folder),sample_output=str(folder/'data/traffic_samples.json'))
+            os.environ['WANDB_DIR']=str(folder/'logs')
+            os.environ.setdefault('WANDB_MODE','offline')
+            manifest=read_json(folder/'manifest.json');manifest.update(training_mode='sampling',state='running')
+            atomic_json(folder/'manifest.json',manifest)
         self.dic_agent_conf = dic_agent_conf
         self.dic_traffic_env_conf = dic_traffic_env_conf
         self.dic_path = dic_path
@@ -25,6 +37,9 @@ class FTS:
         self.num_row = dic_traffic_env_conf['NUM_ROW']
         self.trafficflow = trafficflow
         self.my_config = my_config
+        self.results_dir = Path(my_config.get('evaluation_dir', dic_path['PATH_TO_WORK_DIRECTORY'])) / 'reports' / 'legacy_results'
+        for subdir in ['latest_results','visualization','state_action_log','perf_logs','llm_responses_log','state_img']:
+            (self.results_dir/subdir).mkdir(parents=True,exist_ok=True)
         self.memo = my_config['memo']
         self.reward_type = my_config['reward_type']
         self.boundary_distance_threshold = self.my_config['boundary_distance_threshold']
@@ -366,7 +381,7 @@ class FTS:
                 action_list[inter_id] = best_action_id
                 # print(self.signal_list[0])
                 self.FT_data.append(new_data)
-            sample_path = self.my_config.get('sample_output', './data/FinetuneData/SynTrain_sample_all.json')
+            sample_path = self.my_config.get('sample_output', str(Path(self.dic_path['PATH_TO_WORK_DIRECTORY'])/'traffic_samples.json'))
             os.makedirs(os.path.dirname(sample_path), exist_ok=True)
             with open(sample_path, 'w') as f:
                 json.dump(self.FT_data, f, indent=4)
@@ -449,8 +464,8 @@ class FTS:
             "test_avg_waiting_time_over": np.mean(waiting_time_episode) if len(queue_length_episode) > 0 else 0,
             "test_avg_travel_time_over": total_travel_time}
         logger.log(results)
-        os.makedirs('./results/latest_results', exist_ok=True)
-        with open('./results/latest_results/{}.txt'.format(self.out_file_name), 'w') as f:
+        os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
+        with open(str(self.results_dir / 'latest_results/{}.txt').format(self.out_file_name), 'w') as f:
             for key, value in results.items():
                 f.write(f"{key}: {value}\n")
         print("Test Round:", test_round, results)
@@ -460,6 +475,12 @@ class FTS:
 
         self.env.batch_log_2()
 
+        if self.dic_path.get('EXPERIMENT_DIR'):
+            from utils.training_config import atomic_json,read_json
+            root=Path(self.dic_path['EXPERIMENT_DIR'])
+            manifest=read_json(root/'manifest.json');manifest['state']='completed'
+            atomic_json(root/'manifest.json',manifest)
+            atomic_json(root/'reports/sampling_metrics.json',results)
         return results
     
     def calc_throughput(self):
@@ -982,7 +1003,7 @@ class FTS:
         sample['best_signal']['wt'] = wt_best_signal
         sample['best_signal']['att'] = att_best_signal
         self.FT_data.append(sample)
-        with open('./data/Finetune/SynTrain_sample.json', 'w') as f:
+        with open(self.my_config.get('sample_output', str(Path(self.dic_path['PATH_TO_WORK_DIRECTORY'])/'SynTrain_sample.json')), 'w') as f:
             json.dump(self.FT_data, f, indent=4)
 
     def get_up_down_stream_relation(self, inter_id):
@@ -1176,7 +1197,7 @@ class FTS:
     def save_performance_data(self, data):
         # Load existing data
         filename = f'{self.out_file_name}.json'
-        filepath = './results/perf_logs/'+ filename
+        filepath = str(self.results_dir / 'perf_logs/')+ filename
         perf_data = {}    
         perf_data[self.memo] = data
         # Add or update method data
@@ -1186,7 +1207,7 @@ class FTS:
     
     def save_llm_response_data(self, data):
         # Load existing data
-        filename = f'./results/llm_responses_log/{self.out_file_name}.json'
+        filename = str(self.results_dir / f'llm_responses_log/{self.out_file_name}.json')
         llm_data = {}    
         llm_data[self.memo] = data
         with open(filename, 'w') as f:
@@ -1196,7 +1217,7 @@ class FTS:
         import matplotlib.pyplot as plt
         # Load data
         matching_files = []
-        for root, dirs, files in os.walk('./results/perf_logs/'):
+        for root, dirs, files in os.walk(str(self.results_dir / 'perf_logs/')):
             for file in files:
                 if file.endswith('.json'):
                     parts = file.split('-')
@@ -1231,7 +1252,7 @@ class FTS:
             ax.set_ylabel(metric)
         
         plt.tight_layout()
-        plt.savefig('./results/state_img/{}_performance_plots.png'.format(self.memo))
+        plt.savefig(str(self.results_dir / 'state_img/{}_performance_plots.png').format(self.memo))
         plt.show()
 
     def calc_avg_travel_time(self):
@@ -1351,7 +1372,7 @@ class FTS:
         plt.tight_layout()
 
         # 显示图形
-        plt.savefig('./results/state_img/heatmaps-{}.png'.format(self.out_file_name))
+        plt.savefig(str(self.results_dir / 'state_img/heatmaps-{}.png').format(self.out_file_name))
         # 关闭图形窗口
         plt.close('all')
 
@@ -1787,7 +1808,7 @@ class FTS:
         return n_list
 
     def train_test(self):
-        import wandb
+        from utils.local_tracking import wandb
         all_config = merge(merge(self.dic_agent_conf, self.dic_path), self.dic_traffic_env_conf)
         logger = wandb.init(
             project=self.dic_traffic_env_conf['PROJECT_NAME'],

@@ -1,45 +1,50 @@
+# Credentials and environment files
+.env
+.env.*
+!.env.example
+.venv/
+
+# Editor and operating-system files
 .idea/
 .vscode/
-.DS_Store/
 .DS_Store
+.autodl/
+.cache/
+.ipynb_checkpoints/
+
+# Downloaded weights, training artifacts and generated configuration
+llm_models/
+llm_weights/
 model/
-models/__pycache__/
+outputs/
+config/generated/
+
+# Simulation outputs, experiment logs and local test artifacts
 GPT_logs/
 errors/
-frontend/web/
 records/
 results/
 summary/
 wandb/
-utils/__pycache__/
-scripts/
 logs_case_study/
 logs_transfer/
 records_case_study/
 records_transfer/
 memory/
-llm_weights
-*.sh
-/*.txt
-*.pyc
-*.pkl
-playground*
-outputs/
 my_tests/
 
-.env
-.env.*
-!.env.example
-outputs/
-config/generated/
-
-# Local foundation weights and nested simulator build products
-llm_models/
-CityFlow/build/
-CityFlow/*.egg-info/
-my_tests/logs/
-my_tests/__pycache__/
+# Local CityFlow checkout and build products
 CityFlow/
+frontend/web/
 
-# Keep the dependency manifest despite the general root-level .txt rule.
+# Python caches and serialized artifacts
+__pycache__/
+*.pyc
+*.pkl
+
+# Existing project-local exclusions
+scripts/
+*.sh
+/*.txt
 !/requirements.txt
+playground*

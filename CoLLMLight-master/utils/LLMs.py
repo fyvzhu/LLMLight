@@ -61,6 +61,8 @@ class LLAMA_model:
             "Content-Type": "application/json",
         }
         self.model = model
+        self.session=requests.Session()
+        self.session.trust_env=False
         from transformers import AutoTokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=model)
         self.llm_params = {
@@ -71,6 +73,7 @@ class LLAMA_model:
             "stop_token_ids": [self.tokenizer.eos_token_id],
             "top_k": 50,
             "top_p": 0.95,
+            "logprobs": 0,
         }
         self.llm_params.update(llm_params)
 
@@ -96,7 +99,7 @@ class LLAMA_model:
         }
         data.update(self.llm_params)   
         try:
-            response = requests.post(self.url, headers=self.headers, data=json.dumps(data))
+            response = self.session.post(self.url, headers=self.headers, data=json.dumps(data),timeout=120)
             response_text = response.json()['choices'][0]['text']
             return response_text
         except requests.exceptions.RequestException as e:
@@ -134,8 +137,11 @@ class LLAMA_model:
         }
         data.update(self.llm_params)   
         try:
-            response = requests.post(self.url, headers=self.headers, data=json.dumps(data))
-            response = response.json()['choices']
+            response = self.session.post(self.url, headers=self.headers, data=json.dumps(data),timeout=120)
+            payload=response.json()
+            response=sorted(payload['choices'],key=lambda c:c.get('index',0))
+            self.last_generation_metadata=[{'completion_tokens':len((c.get('logprobs') or {}).get('tokens',[])),
+                'token_count_source':'server_logprobs','finish_reason':c.get('finish_reason')} for c in response]
             response_text = [c['text'] for c in response]
             # print(response_text)
             return response_text

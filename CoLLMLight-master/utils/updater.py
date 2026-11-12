@@ -57,7 +57,7 @@ class Updater:
             print("==== memory samples number =====:", sample_size)
 
         except:
-            error_dir = os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"]).replace("records", "errors")
+            error_dir = self.dic_path.get("PATH_TO_ERROR", os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"]).replace("records", "errors"))
             if not os.path.exists(error_dir):
                 os.makedirs(error_dir)
             f = open(os.path.join(error_dir, "error_info_inter_{0}.txt".format(i)), "a")
@@ -95,6 +95,19 @@ class Updater:
     def update_network(self, i):
         print('update agent %d' % i)
         self.agents[i].train_network()
+        if self.dic_path.get('EXPERIMENT_DIR'):
+            from utils.experiment import append_jsonl
+            network=getattr(self.agents[i],'q_network',None)
+            history=getattr(getattr(network,'history',None),'history',None)
+            if history:
+                count=max(len(v) for v in history.values())
+                for epoch in range(count):
+                    append_jsonl(os.path.join(self.dic_path['EXPERIMENT_DIR'],'metrics/rl_train.jsonl'),
+                        {'round':self.cnt_round,'agent':i,'epoch':epoch,
+                         **{k:v[epoch] for k,v in history.items() if epoch<len(v)}})
+            else:
+                append_jsonl(os.path.join(self.dic_path['EXPERIMENT_DIR'],'metrics/rl_train.jsonl'),
+                    {'round':self.cnt_round,'agent':i,'loss':None,'reason':'model did not expose fit history'})
         self.agents[i].save_network("round_{0}_inter_{1}".format(self.cnt_round, self.agents[i].intersection_id))
 
     def update_network_for_agents(self):

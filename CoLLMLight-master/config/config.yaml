@@ -1,19 +1,23 @@
-# 唯一训练/导出/CityFlow测试配置；所有相对路径以项目根目录为准。
+# 当前明确为小样本调通配置，不启动全量训练。所有路径相对项目根目录。
 experiment:
+  algorithm: CoLLMLight
   run_name: qwen15b_smoke
   random_seed: 42
   output_root: ./outputs
-
-# 教师连接参数与密钥在 .env；这里仅设置数据生成任务。
+training:
+  enable_ppo: true       # false = 仅SFT；true = SFT最佳产物后接PPO
+  data_preparation: reuse # 使用已有真实教师数据；generate_teacher 才会调用付费教师
+  sft_source_run: null   # 对比实验可填写已完成的同源SFT实验目录
 teacher_data:
   source_path: ./data/FinetuneData/SynTrain_sample_all.json
-  output_path: ./data/FinetuneData/syn_rt_data.json
+  output_path: ./data/FinetuneData/syn_rt_data.json # reuse输入；生成输出自动隔离到本实验
   max_samples: 5
   random_seed: 42
   resume: true
 data:
   eval_ratio: 0.2
-  sft_require_ra_match: true
+  ppo_eval_ratio: 0.1
+  sft_require_ra_match: false
 sft:
   lora:
     rank: 8
@@ -28,37 +32,49 @@ sft:
   per_device_batch_size: 1
   max_steps: 2
   logging_steps: 1
-  
-# batch_size 按 query 数计数：每条交通记录对应 ATR、RA 两项，必须为偶数。
+  save_strategy: steps   # 调通测试每步保存+验证，保证有两个真实候选；正式训练可改epoch
+  eval_strategy: steps
+  save_steps: 1
+  best_metric: eval_loss
+  greater_is_better: false
 ppo:
   lora:
     rank: 8
     alpha: 16
     dropout: 0.0
-    target_modules: all-linear
+    target_modules: auto # 原版PEFT架构默认层；不再all-linear
   learning_rate: 1.0e-05
-  num_epochs: 1
+  num_epochs: 2           # 小规模检验下一轮Adapter加载与最终轮验证
   gradient_accumulation_steps: 1
   gradient_checkpointing: true
-  quantization_bits: 0
-  batch_size: 2
-  mini_batch_size: 1
+  quantization_bits: 4    # 原版NF4双重量化、BF16计算
+  batch_size: 4           # 4 query = 2条交通记录
+  mini_batch_size: 2
   optimization_epochs: 1
-  max_updates: 1
+  max_updates: 0          # 不按update截断；小数据+少epoch限制规模
+  max_samples: 4
   max_new_tokens: 1024
   temperature: 0.1
+  top_k: 50
+  top_p: 0.95
+  whiten_rewards: true
+  gpu_memory_utilization: 0.25
 export:
-  source: ppo_best
-  output_dir: null  # 自动使用 outputs/<run_name>/trained_best_model
+  source: auto
+  output_dir: null
   device: cpu
   dtype: auto
   validate: true
   auto_export: true
 cityflow_test:
-  model_path: null  # 默认使用上面的完整模型；可填写其他完整模型目录
-  backend: transformers
+  model_path: null       # 运行评测时显式--run-dir，或直接在这里指定完整模型
+  backend: transformers # 可选llama，走原兼容服务端接口
+  port: 23333
   dataset: synthetic_4x4
   traffic_file: anon_4_4_synthetic_8000.json
   run_counts: 60
   max_new_tokens: 1024
   seed: 42
+  sr_mode: original
+  stale_probability: 0.5
+  communication_failure_probability: 0.5

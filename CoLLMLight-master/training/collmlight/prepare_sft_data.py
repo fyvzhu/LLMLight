@@ -1,3 +1,8 @@
+# Direct script execution uses the same project root as module execution.
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 """Convert teacher examples into record-split, assistant-supervised SFT data."""
 import random
 from utils.prompts import SYSTEM_PROMPT
@@ -5,6 +10,9 @@ from utils.training_config import TrainingConfig, atomic_json, config_args, read
 from utils.training_rewards import parse_action
 
 
+from utils.experiment import exclusive_stage
+
+@exclusive_stage
 def prepare(cfg):
     records = read_json(cfg.path('TEACHER_OUTPUT_PATH'))
     ids = [r['sample_id'] for r in records]
@@ -37,7 +45,7 @@ def prepare(cfg):
                                     'instruction': record[f'{task}_user_prompt'], 'input': '', 'output': output})
     if not datasets['train'] or not datasets['eval']:
         raise ValueError('No usable train/eval examples after validation')
-    folder = cfg.out / 'sft_data'
+    folder = cfg.data_dir / 'sft_data'
     for split, data in datasets.items():
         atomic_json(folder / f'{split}.json', data)
     atomic_json(folder / 'split_manifest.json', manifest)
@@ -52,4 +60,4 @@ def prepare(cfg):
 
 if __name__ == '__main__':
     args = config_args(__doc__).parse_args()
-    prepare(TrainingConfig(args.env_file, config_file=args.config_file))
+    prepare(TrainingConfig(args.env_file, config_file=args.config_file, run_dir=args.run_dir))

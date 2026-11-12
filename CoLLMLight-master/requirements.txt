@@ -5,11 +5,17 @@ numpy==1.26.4
 pandas==2.2.2
 Requests==2.31.0
 tensorflow_cpu==2.8.0
-tensorflow_gpu==2.8.0
-torch==2.2.2
+# Legacy RL uses tensorflow_cpu and isolated protobuf; see TRAINING.md.
+torch==2.7.0
 tqdm==4.66.2
-transformers==4.48.2
+transformers==4.51.3
 trl==0.9.2
 vllm==0.9.1
 lmdeploy==0.9.0
-dotenv
+python-dotenv==1.2.4
+
+# Already present dependencies plus the NF4 package checked/installed in round 3.
+peft==0.14.0
+accelerate==1.15.0
+bitsandbytes==0.46.1
+PyYAML==6.0.3

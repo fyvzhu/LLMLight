@@ -7,9 +7,9 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-def test(model_dir, data_dir, cnt_round, run_cnt, _dic_traffic_env_conf, logger):
+def test(model_dir, data_dir, cnt_round, run_cnt, _dic_traffic_env_conf, logger, records_dir=None):
     dic_traffic_env_conf = deepcopy(_dic_traffic_env_conf)
-    records_dir = model_dir.replace("model", "records")
+    records_dir = records_dir or model_dir.replace("model", "records")
     model_round = "round_%d" % cnt_round
     dic_path = {"PATH_TO_DATA": data_dir, "PATH_TO_MODEL": model_dir, "PATH_TO_WORK_DIRECTORY": records_dir}
     with open(os.path.join(records_dir, "agent.conf"), "r") as f:

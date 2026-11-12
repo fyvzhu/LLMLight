@@ -1,3 +1,4 @@
+from pathlib import Path
 from utils.my_utils import *
 from utils.utils import *
 from utils.LLMs import *
@@ -48,6 +49,9 @@ class CoLLMLight:
         self.num_row = dic_traffic_env_conf['NUM_ROW']
         self.trafficflow = trafficflow
         self.my_config = my_config
+        self.results_dir = Path(my_config.get('evaluation_dir', dic_path['PATH_TO_WORK_DIRECTORY'])) / 'reports' / 'legacy_results'
+        for subdir in ['latest_results','visualization','state_action_log','perf_logs','llm_responses_log','state_img']:
+            (self.results_dir/subdir).mkdir(parents=True,exist_ok=True)
         self.memo = my_config['memo']
         self.history_data = None
         
@@ -114,17 +118,47 @@ class CoLLMLight:
     def llm_init(self):
         # congestion_intersection
         llm_params = {
-            "max_tokens": self.my_config['max_tokens']}
+            "max_tokens": self.my_config['max_tokens'],"seed":self.my_config.get('seed',42)}
         model = self.my_config['llm_path']
         model_type = self.my_config['llm_type']
         if model_type == 'transformers':
             from utils.inference_models import TransformersModel
-            self.LLM = TransformersModel(model, self.my_config['max_tokens'], self.my_config.get('dtype', 'auto'))
+            self.LLM = TransformersModel(model, self.my_config['max_tokens'], self.my_config.get('dtype', 'auto'),do_sample=True)
         elif model_type == 'gpt':
             self.LLM = GPT_model(model=model)
         elif model_type == 'llama':
             self.LLM = LLAMA_model(llm_params = llm_params, model=model, port=self.my_config['port'])
     
+        self.LLM.generation_seed=self.my_config.get('seed',42)
+        if self.my_config.get('evaluation_dir'):
+            from utils.inference_logging import ObservedLLM
+            self.LLM=ObservedLLM(self.LLM,self.my_config['evaluation_dir'])
+
+    def observation_snapshot(self, ids):
+        from utils.sr_experiments import neighbor_lane
+        snapshots=[]
+        for inter_id in ids:
+            agent=self.agent_intersection_list[inter_id]
+            observation=deepcopy(agent.traffic_state_log[-self.h_w_size:] if agent.syn_psr else agent.traffic_state_log[-self.h_w_size-1:-1])
+            current=observation[-1] if observation else {}
+            own=set();neighbor=set();neighbor_ids=set()
+            past=self.history_states[-1] if agent.syn_psr else (self.history_states[-2] if len(self.history_states)>1 else None)
+            own_count=0;neighbor_count=0
+            for lane,item in current.items():
+                if lane in ('Signal','Summary') or not isinstance(item,dict):continue
+                count=item.get('Queued Cars',0)+item.get('Moving Cars',0)
+                if neighbor_lane(lane) is not None:
+                    index,key=neighbor_lane(lane);neighbor_ids.add(index);neighbor_count+=count
+                    if past is not None and isinstance(index,int) and 0<=index<len(past):neighbor.update(past[index].get(key,{}).get('veh2cell',{}))
+                else:
+                    own_count+=count
+                    if past is not None:own.update(past[inter_id].get(lane,{}).get('veh2cell',{}))
+            snapshots.append({'own_vehicle_count':own_count,'neighbor_vehicle_count':neighbor_count,
+                'observed_vehicle_union_count':len(own|neighbor) if past is not None else None,
+                'vehicle_count_scope':'lanes in latest SR historical observation; unique vehicle IDs when available',
+                'observation':observation,'observed_neighbor_ids':list(neighbor_ids)})
+        return snapshots
+
     def history_data_init(self):
         self.history_data = {}
         self.history_data["release_range"] = {lane:{} for lane in location_direction_dict}
@@ -365,6 +399,13 @@ class CoLLMLight:
             att = round(att,3)
             throughput = self.calc_throughput()
             print("Queuing Vehicles:", np.sum(queue_length_inter), "Veh num: ", veh_num, "new Vehs: ", veh_num - last_veh_num, "AWT: ", awt, "AQL:", aql, "ATT:", att, 'Throughput:', throughput)
+            if self.my_config.get('evaluation_dir'):
+                from utils.experiment import append_jsonl
+                append_jsonl(Path(self.my_config['evaluation_dir'])/'metrics/traffic.jsonl',
+                    {'step':step_num,'simulation_time':current_time,'queue_network_sum':sum(queue_length_inter),
+                     'queue_by_intersection':queue_length_inter,'waiting_vehicle_times':dict(self.env.waiting_vehicle_list),
+                     'AWT':awt,'AQL':aql,'ATT':att,'throughput':throughput,
+                     'definitions':'original CoLLMLight: AQL=time-mean network queue sum; AWT=time-mean stopped-vehicle mean wait; ATT=sum intersection residence per vehicle'})
             self.history_data['perf']['AWT'].append(awt)
             self.history_data['perf']['AQL'].append(aql)
             self.history_data['perf']['ATT'].append(att)
@@ -393,9 +434,9 @@ class CoLLMLight:
             "avg_ra_time": total_ra_time/total_inference_ct if total_inference_ct else 0.0,
             "total_inference_ct": total_inference_ct}
         logger.log(results)
-        os.makedirs('./results/latest_results', exist_ok=True)
-        os.makedirs('./results/latest_results', exist_ok=True)
-        with open('./results/latest_results/{}.txt'.format(self.out_file_name), 'w') as f:
+        os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
+        os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
+        with open(str(self.results_dir / 'latest_results/{}.txt').format(self.out_file_name), 'w') as f:
             for key, value in results.items():
                 f.write(f"{key}: {value}\n")
         print("Test Round:", test_round, results)
@@ -408,6 +449,9 @@ class CoLLMLight:
         return results
     
     def Asynchronous_Reasoning_and_Acting(self, action_list, decision_making_intersection_id_list, step_num):
+        mode=self.my_config.get('sr_mode','original')
+        if mode not in ('original','sync_sr','without_sr'):
+            return self.experimental_reasoning_and_acting(action_list,decision_making_intersection_id_list,step_num)
         # 1st stage Advance Traffic Reasoning  
 
         advance_traffic_reasoning_output_list, advance_traffic_reasoning_messages_list, atr_total_time_cost = self.advance_traffic_reasoning(decision_making_intersection_id_list, step_num)
@@ -423,11 +467,52 @@ class CoLLMLight:
         time_cost['ra'] = ra_total_time_cost
         return action_list, total_messages_list, atr_score_list, time_cost
     
+    def experimental_reasoning_and_acting(self,actions,ids,step):
+        from utils.sr_experiments import SRCoordinator,choose_failed_neighbor,neighbor_lane
+        from utils.experiment import append_jsonl
+        import random
+        mode=self.my_config['sr_mode']
+        folder=Path(self.my_config['evaluation_dir'])
+        record=lambda row:append_jsonl(folder/'metrics/sr_events.jsonl',row)
+        if not hasattr(self,'sr_coordinator'):
+            self.sr_coordinator=SRCoordinator(self.my_config.get('seed',42),
+                self.my_config.get('stale_probability',0.5) if mode=='stale_sr' else 0.0,record)
+            self.fault_rng=random.Random(self.my_config.get('seed',42)+1009)
+        saved=[]
+        try:
+            if mode=='communication_failure':
+                for index in ids:
+                    agent=self.agent_intersection_list[index]
+                    neighbors=[neighbor_lane(k)[0] for item in agent.traffic_state_log for k in item if neighbor_lane(k) is not None]
+                    failed=choose_failed_neighbor(neighbors,self.fault_rng,self.my_config.get('communication_failure_probability',0.5))
+                    saved.append((agent,agent.traffic_state_log))
+                    if failed is not None:
+                        agent.traffic_state_log=[{k:v for k,v in item.items() if not (neighbor_lane(k) is not None and neighbor_lane(k)[0]==failed)} for item in agent.traffic_state_log]
+                    agent._unavailable_note='' if failed is None else f'\nNeighbor {failed} communication is unavailable; missing data does not mean an empty or uncongested lane.\n'
+                    record({'event':'communication','step':step,'intersection':index,'failed_neighbor':failed,'probability':self.my_config.get('communication_failure_probability',0.5),'scope':'one neighbor per agent decision'})
+            outputs=self.sr_coordinator.consume(step,ids)
+            prompts=[self.agent_intersection_list[i].advance_traffic_reasoning_prompt(step)+getattr(self.agent_intersection_list[i],'_unavailable_note','') for i in ids]
+            snapshots=self.observation_snapshot(ids)
+            # Prompts and observations are frozen on the simulation thread before submission.
+            def inference():
+                self.LLM.set_context(module='SR',step=step,intersections=list(ids),observations=snapshots)
+                texts=self.LLM.batch_ask(prompts,system_prompt=SYSTEM_PROMPT,disable_thinking=True)
+                return [self.extract_after_think_tag(t) for t in texts]
+            self.sr_coordinator.submit(step,ids,inference)
+            actions,ra_messages,used,ra_time=self.reactive_action(actions,outputs,ids,step)
+            sr_messages=[[{'role':'assistant','content':o}] for o in outputs]
+            return actions,[a+b for a,b in zip(sr_messages,ra_messages)],used,{'atr':0.0,'ra':ra_time}
+        finally:
+            for agent,history in saved:agent.traffic_state_log=history;agent._unavailable_note=''
+
     def advance_traffic_reasoning(self, decision_making_intersection_id_list, step_num):
         decision_making_1st_prompts_list = []
         for inter_id in decision_making_intersection_id_list:
             agent = self.agent_intersection_list[inter_id]
             decision_making_1st_prompts_list.append(agent.advance_traffic_reasoning_prompt(step_num))
+        if hasattr(self.LLM,'set_context'):
+            self.LLM.set_context(module='SR',step=step_num,intersections=list(decision_making_intersection_id_list),
+                observations=self.observation_snapshot(decision_making_intersection_id_list))
         atr_start_time = time.time()
         if self.disable_psr:
             advance_traffic_reasoning_output_list = ["" for _ in range(len(decision_making_1st_prompts_list))]
@@ -450,7 +535,9 @@ class CoLLMLight:
         decision_making_2st_prompts_list = []
         for i, inter_id in enumerate(decision_making_intersection_id_list):
             agent = self.agent_intersection_list[inter_id]
-            decision_making_2st_prompts_list.append(agent.reactive_action_prompt(advance_traffic_reasoning_output_list[i], step_num))
+            decision_making_2st_prompts_list.append(agent.reactive_action_prompt(advance_traffic_reasoning_output_list[i], step_num)+getattr(agent,'_unavailable_note',''))
+        if hasattr(self.LLM,'set_context'):
+            self.LLM.set_context(module='RD',step=step_num,intersections=list(decision_making_intersection_id_list))
         ra_start_time = time.time()
         reactive_action_output_list = self.LLM.batch_ask(decision_making_2st_prompts_list, system_prompt=SYSTEM_PROMPT, disable_thinking=True)
         ra_total_time_cost = time.time()-ra_start_time
@@ -528,7 +615,7 @@ class CoLLMLight:
     def plot_coordination_distribution(self, no_coordination_history, simple_coordination_history, complex_coordination_history, avg_infer_speed, total_step_num):  
         import matplotlib.pyplot as plt
         # Create the directory if it doesn't exist  
-        save_dir = './results/visualization'  
+        save_dir = str(self.results_dir / 'visualization')
         os.makedirs(save_dir, exist_ok=True)  
         
         # Construct the full file path  
@@ -582,7 +669,7 @@ class CoLLMLight:
             self.state_action_log[step_num][i]['next_state'] = next_states[i]
             self.state_action_log[step_num][i]['name'] = self.intersection_list[i]
             self.state_action_log[step_num][i]['neighbor'] = self.get_neighbor_list(i)
-        with open('./results/state_action_log/{}.json'.format(self.out_file_name), 'w') as f:
+        with open(str(self.results_dir / 'state_action_log/{}.json').format(self.out_file_name), 'w') as f:
             json.dump(self.state_action_log, f, indent=4)
     
     # communicate_lanes = self.adaptive_communication(communicate_data_check_prompt_list, communicate_data_location_list)
@@ -1060,7 +1147,7 @@ class CoLLMLight:
     def save_performance_data(self, data):
         # Load existing data
         filename = f'{self.out_file_name}.json'
-        filepath = './results/perf_logs/'+ filename
+        filepath = str(self.results_dir / 'perf_logs/')+ filename
         perf_data = {}    
         perf_data[self.memo] = data
         # Add or update method data
@@ -1070,7 +1157,7 @@ class CoLLMLight:
     
     def save_llm_response_data(self, data):
         # Load existing data
-        directory = f'./results/llm_responses_log/'
+        directory = str(self.results_dir / f'llm_responses_log/')
         filename = os.path.join(directory, f'{self.out_file_name}.json')
         
         # 确保目录存在（包括中间目录）
@@ -1084,7 +1171,7 @@ class CoLLMLight:
         import matplotlib.pyplot as plt
         # Load data
         matching_files = []
-        for root, dirs, files in os.walk('./results/perf_logs/'):
+        for root, dirs, files in os.walk(str(self.results_dir / 'perf_logs/')):
             for file in files:
                 if file.endswith('.json'):
                     parts = file.split('-')
@@ -1119,7 +1206,7 @@ class CoLLMLight:
             ax.set_ylabel(metric)
         
         plt.tight_layout()
-        plt.savefig('./results/state_img/{}_performance_plots.png'.format(self.dataset_name))
+        plt.savefig(str(self.results_dir / 'state_img/{}_performance_plots.png').format(self.dataset_name))
         plt.show()
 
     def calc_avg_travel_time(self):
@@ -1265,7 +1352,7 @@ class CoLLMLight:
         plt.tight_layout()
 
         # 显示图形
-        plt.savefig('./results/state_img/heatmaps-{}.png'.format(self.out_file_name))
+        plt.savefig(str(self.results_dir / 'state_img/heatmaps-{}.png').format(self.out_file_name))
         # 关闭图形窗口
         plt.close('all')
 
@@ -1718,7 +1805,7 @@ class CoLLMLight:
         return n_list
 
     def train_test(self):
-        import wandb
+        from utils.local_tracking import wandb
         all_config = merge(merge(self.dic_agent_conf, self.dic_path), self.dic_traffic_env_conf)
         logger = wandb.init(
             project=self.dic_traffic_env_conf['PROJECT_NAME'],

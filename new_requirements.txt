@@ -5,3 +5,11 @@ tokenizers==0.21.4  # 兼容性调整，原版本 0.23.3
 transformers==4.48.2  # 兼容性调整，原版本 5.20.2
 
 # 第二轮目录/配置/导出改造：已检查原 uv 环境，PyYAML==6.0.3 等均已存在；无新增或版本调整。
+
+# 第三轮 2026-11-12：安装前已检查原uv环境；仅新增/调整以下两项。
+transformers==4.51.3  # 原4.48.2，与已安装vLLM0.9.1要求>=4.51.1对齐
+bitsandbytes==0.46.1  # 原未安装，恢复原PPO NF4 4bit训练所需
+
+# 第三轮：原tensorflow-cpu2.8实际构图与主环境protobuf7不兼容；不降级vLLM依赖。
+# 下列包仅安装在CoLLMLight-master/.venv/compat/tensorflow28，由utils/config.py在独立RL进程优先加载。
+protobuf==3.20.3  # 隔离安装；主环境protobuf==7.36.2保持原样
