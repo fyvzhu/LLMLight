@@ -16,8 +16,6 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
         raise ValueError('Evaluation requires --run-dir or cityflow_test.model_path; it never starts training')
     if model_path and cfg['CITYFLOW_MODEL_PATH'] and str(Path(model_path).resolve())!=str(cfg.path('CITYFLOW_MODEL_PATH')):
         raise ValueError('Conflicting explicit model paths')
-    if cfg['CITYFLOW_SR_MODE'] not in ('original','sync_sr','without_sr','async_sr','stale_sr','communication_failure'):
-        raise ValueError('Unknown SR experiment mode')
     explicit=model_path or (cfg.path('CITYFLOW_MODEL_PATH') if cfg['CITYFLOW_MODEL_PATH'] else None)
     if cfg.run_dir and explicit is not None and Path(explicit).resolve()!=cfg.export_dir.resolve():
         raise ValueError('run-dir and explicit model identify different experiments; select just the explicit model for a new evaluation')
@@ -57,14 +55,13 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
         from utils.experiment import create_run
         parent=create_run(cfg)
     else:raise ValueError('Choose an explicit --run-dir or full model path')
-    folder=create_evaluation(parent,dataset+'_'+cfg['CITYFLOW_SR_MODE'])
+    folder=create_evaluation(parent,dataset)
     paths={'PATH_TO_MODEL':str(folder/'model'),'PATH_TO_WORK_DIRECTORY':str(folder/'records/simulation'),
            'PATH_TO_DATA':str(data_path)}
     runtime=dict(llm_path=str(model_path),llm_type=cfg['CITYFLOW_BACKEND'],memo=cfg['RUN_NAME'],
                  dataset=dataset,debug_wollm=False,max_tokens=cfg['CITYFLOW_MAX_NEW_TOKENS'],
-                 communication_threshold=0,h_w_size=5,disable_psr=cfg['CITYFLOW_SR_MODE']=='without_sr',dtype='auto',
-                 port=cfg['CITYFLOW_PORT'],evaluation_dir=str(folder),sr_mode=cfg['CITYFLOW_SR_MODE'],
-                 seed=cfg['CITYFLOW_SEED'],stale_probability=cfg['STALE_PROBABILITY'],communication_failure_probability=cfg['COMM_FAILURE_PROBABILITY'])
+                 communication_threshold=0,h_w_size=5,disable_psr=cfg['CITYFLOW_DISABLE_SR'],dtype='auto',
+                 port=cfg['CITYFLOW_PORT'],evaluation_dir=str(folder),seed=cfg['CITYFLOW_SEED'])
     if cfg['CITYFLOW_BACKEND']=='llama':
         import requests
         session=requests.Session();session.trust_env=False
@@ -78,11 +75,9 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
         controller=CoLLMLight({'NEW_MAX_TOKENS':runtime['max_tokens'],'MODE':'collmlight'},env,paths,net,traffic_file,runtime)
         class LocalLogger:
             def log(self,values):atomic_json(folder/'metrics.json',values)
-        if cfg['CITYFLOW_SR_MODE']=='sync_sr':
+        if cfg['CITYFLOW_SYNCHRONOUS_SR']:
             for agent in controller.agent_intersection_list:agent.syn_psr=True
-        try:metrics=controller.test(LocalLogger(),0)
-        finally:
-            if hasattr(controller,'sr_coordinator'):controller.sr_coordinator.close()
+        metrics=controller.test(LocalLogger(),0)
         decisions=[]
         for intersection,records in controller.history_data['llm_resulst'].items():
             for record in records:
@@ -91,9 +86,8 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
                 try:parsed=parse_action(raw)
                 except ValueError:parsed=None
                 decisions.append({'intersection':intersection,'step':record['step'],'action':parsed,'response':raw})
-        report={'dataset':dataset,'traffic_file':traffic_file,'roadnet_file':roadnet,'seed':cfg['CITYFLOW_SEED'],'sr_mode':cfg['CITYFLOW_SR_MODE'],'model_path':str(model_path),'backend':cfg['CITYFLOW_BACKEND'],
+        report={'dataset':dataset,'traffic_file':traffic_file,'roadnet_file':roadnet,'seed':cfg['CITYFLOW_SEED'],'disable_sr':cfg['CITYFLOW_DISABLE_SR'],'synchronous_sr':cfg['CITYFLOW_SYNCHRONOUS_SR'],'model_path':str(model_path),'backend':cfg['CITYFLOW_BACKEND'],
                 'run_counts':steps,'llm_calls':getattr(controller.LLM,'calls',None),
-                'timing_note':'For async modes legacy ATR time is blocking-wait accounting only; use metrics/inference.jsonl for actual SR wall latency.',
                 'decisions':decisions,'valid_decisions':sum(d['action'] is not None for d in decisions),
                 'fallback_decisions':metrics['LLM fail num'],'metrics':metrics}
         atomic_json(folder/'reports/integration_report.json',report)
@@ -112,7 +106,6 @@ if __name__=='__main__':
     parser.add_argument('--model_path','--model-path',dest='model_path',default=None)
     parser.add_argument('--run-counts',type=int,default=None)
     parser.add_argument('--backend','--model_type',dest='backend',choices=['transformers','llama'])
-    parser.add_argument('--sr-mode',choices=['original','sync_sr','without_sr','async_sr','stale_sr','communication_failure'])
     parser.add_argument('--port',type=int)
     parser.add_argument('--new_max_tokens','--max-new-tokens',dest='max_tokens',type=int)
     parser.add_argument('--disable_psr',action='store_true')
@@ -121,11 +114,10 @@ if __name__=='__main__':
     parser.add_argument('--traffic_file','--traffic-file',dest='traffic_file',default=None)
     args=parser.parse_args()
     cfg=TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir,evaluation=True)
-    for name,key in [('backend','CITYFLOW_BACKEND'),('sr_mode','CITYFLOW_SR_MODE'),('port','CITYFLOW_PORT'),('max_tokens','CITYFLOW_MAX_NEW_TOKENS')]:
+    for name,key in [('backend','CITYFLOW_BACKEND'),('port','CITYFLOW_PORT'),('max_tokens','CITYFLOW_MAX_NEW_TOKENS')]:
         if getattr(args,name) is not None:cfg.values[key]=getattr(args,name)
     if args.disable_psr:
-        if args.sr_mode not in (None,'without_sr'):parser.error('disable_psr conflicts with sr-mode')
-        cfg.values['CITYFLOW_SR_MODE']='without_sr'
+        cfg.values['CITYFLOW_DISABLE_SR']=True
     chosen=None
     if args.model_path:
         from pathlib import Path

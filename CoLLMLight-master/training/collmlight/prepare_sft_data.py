@@ -8,6 +8,7 @@ import random
 from utils.prompts import SYSTEM_PROMPT
 from utils.training_config import TrainingConfig, atomic_json, config_args, read_json
 from utils.training_rewards import parse_action
+from utils.training_config import digest
 
 
 from utils.experiment import exclusive_stage
@@ -15,7 +16,10 @@ from utils.experiment import exclusive_stage
 @exclusive_stage
 def prepare(cfg):
     records = read_json(cfg.path('TEACHER_OUTPUT_PATH'))
-    ids = [r['sample_id'] for r in records]
+    fields={'atr_user_prompt','atr_output','ra_user_prompt','ra_output','data','complex_level'}
+    if not isinstance(records,list) or any(not isinstance(r,dict) or set(r)!=fields or 'sample_id' in r['data'] for r in records):
+        raise ValueError('Expected the published six-field ATR/RA data; regenerate obsolete teacher files')
+    ids = [digest(r['data']) for r in records]
     if len(set(ids)) != len(ids) or len(ids) < 2:
         raise ValueError('Need at least two unique completed teacher records for train/eval split')
     random.Random(cfg['RANDOM_SEED']).shuffle(ids)
@@ -24,7 +28,7 @@ def prepare(cfg):
     reports = []
     datasets = {'train': [], 'eval': []}
     for record in records:
-        sid = record['sample_id']
+        sid = digest(record['data'])
         split = 'train' if sid in manifest['train'] else 'eval'
         for task in ('atr', 'ra'):
             output = record[f'{task}_output']

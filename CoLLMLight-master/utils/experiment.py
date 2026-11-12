@@ -41,13 +41,14 @@ def create_run(cfg, now=None):
             raise ValueError('Unsafe experiment name')
     now = now or datetime.now(ZoneInfo('Asia/Shanghai'))
     if now.tzinfo is None:now=now.replace(tzinfo=ZoneInfo('Asia/Shanghai'))
-    folder = cfg.path('OUTPUT_ROOT')/cfg['ALGORITHM']/(cfg['RUN_NAME']+'_'+now.strftime('%Y%m%d_%H%M%S_%f'))
+    folder = cfg.path('OUTPUT_ROOT')/cfg['ALGORITHM']/(cfg['ALGORITHM']+'_'+now.strftime('%Y%m%d_%H%M%S_%f'))
     folder.parent.mkdir(parents=True, exist_ok=True)
     folder.mkdir(exist_ok=False)
-    for d in ['config','data/teacher','models','logs','metrics','records','evaluations','reports']:
+    for d in ['config','data/traffic_samples','data/teacher_data','models','logs','metrics','records','evaluations','reports']:
         (folder/d).mkdir(parents=True, exist_ok=True)
     values = dict(cfg.values)
-    if cfg['DATA_PREPARATION']=='sample_and_generate':values['TRAFFIC_SAMPLE_PATH']=str(folder/'data/traffic_samples.json')
+    values['TRAFFIC_SAMPLE_PATH']=str(folder/'data/traffic_samples/SynTrain_sample_all.json')
+    values['TEACHER_OUTPUT_PATH']=str(folder/'data/teacher_data/syn_rt_data.json')
     import importlib.metadata
     import sys
     packages={}

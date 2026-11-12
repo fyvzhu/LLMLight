@@ -70,7 +70,7 @@ class TransformersModel:
 
 def evaluate_policy(client, records):
     from .prompts import SYSTEM_PROMPT,get_atr_user_prompt,get_ra_user_prompt
-    from .training_rewards import calculate_reactive_action_reward,calculate_advance_reasoning_reward
+    from training.collmlight.ppo_ft import calculate_reactive_action_reward,calculate_advance_reasoning_reward
     values=[]
     for record in records:
         atr=client.ask(get_atr_user_prompt(record),SYSTEM_PROMPT)

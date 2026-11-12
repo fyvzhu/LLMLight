@@ -1,138 +1,93 @@
-# CoLLMLight 训练与独立评测
+# CoLLMLight 训练与评测
 
-2026-11-12 更新。当前默认配置只用于工程调通，不是论文全量参数；完整实测记录见 `my_tests/第三轮测试结果.md`。
+本项目采用 ICLR 2026 发布代码的 ATR/RA 教师生成、PPO 及 CityFlow 控制流程。补充的部分是 LoRA-SFT、阶段衔接、统一配置、日志和完整最佳模型导出；原代码中的批量计数、Adapter 恢复和验证选模错误保留必要修复。没有旧版教师格式兼容层，没有额外实验训练入口，也不输出基线比对 JSON。
 
-## 入口和目录
+## 环境与配置
 
-- **总训练入口**：`training/collmlight/train_collmlight.py`。
-- **CityFlow 评测入口**：根目录 `run_CoLLMlight.py`，只评测，不运行 SFT/PPO。
-- 原七份主流程训练脚本迁入 `training/collmlight/`，名字保留；历史 `reasoning_refinement.py` 在其 `legacy/` 中，不自动执行。
-- `framework/CoLLMlight.py`、`framework/FTSample.py` 保留控制和采样实现；对比算法继续使用各自根目录 `run_xx.py`，`models/` 保留智能体。
+使用现有 `CoLLMLight-master/.venv`。教师和学生模型连接设置在 `.env`；训练与评测参数统一在 `config/config.yaml`。只修改这一份主配置即可调整数据量和训练轮次，不需要建立“调通专用”配置。
 
-所有命令从 `CoLLMLight-master/` 执行，使用已有 `.venv/bin/python`。不要从系统 Python 或另一套环境启动。
-
-```bash
-.venv/bin/python -m training.collmlight.train_collmlight --help
-.venv/bin/python -m training.collmlight.train_collmlight --dry-run
-.venv/bin/python -m training.collmlight.train_collmlight --config config/config.yaml
-```
-
-直接执行 `.venv/bin/python training/collmlight/train_collmlight.py --config config/config.yaml` 也受支持。旧的 `python run_sft.py` / `python ppo_ft.py` 等根目录命令已迁移，不再保留两份实现；独立阶段使用 `python -m training.collmlight.<原模块名> --config ... --run-dir <已初始化实验>`。
-
-## 配置：仅 SFT 或两阶段
-
-教师/学生连接、模型和凭证继续在 `.env`，不写入 YAML 或上传日志。`config/config.yaml` 是任务配置来源：
+输出根目录为顶层 `output_root`，训练随机种子在 `training.random_seed`。算法名称固定为CoLLMLight，不在YAML中配置，也没有experiment分组或实验模式开关。教师数据抽样和CityFlow评测分别使用其各自的random_seed/seed。
 
 ```yaml
+output_root: ./outputs
 training:
-  enable_ppo: true              # false：仅 SFT；true：SFT + PPO
-  data_preparation: reuse       # 默认不产生教师费用
-  sft_source_run: null
-export:
-  source: auto
-  output_dir: null
-  validate: true
-  auto_export: true
+  random_seed: 42
+  enable_ppo: true
+  data_preparation: sample_and_generate
 ```
 
-- `reuse`：读取 `teacher_data.output_path` 指定的已有真实教师数据，复制到本次实验后转换；缺数据时报错，不自行付费调用。
-- `generate_teacher`：从 `teacher_data.source_path` 生成指定条数教师数据，按记录保存进度。
-- `sample_and_generate`：先进行小规模 CityFlow 采样，再调用教师；公共输入文件不被覆盖。
-- `teacher_data.max_samples` 与 `ppo.max_samples` 的 **0 显式表示全部有效记录**；默认分别5、4，不会自动全量。
+当前配置数值有限，以适配现有资源：采样3个决策步、教师2条、SFT最多2次更新、PPO最多4条记录和2个外层epoch。采样、数据上限、训练更新上限均由YAML控制，不在代码中固定为小规模。正式运行可修改对应参数：sampling.max_steps=0、teacher_data.max_samples=0、sft.max_steps=-1、ppo.max_samples=0，并设置需要的epoch/batch等值。
 
-两模式都验证 SFT checkpoint，选择最低 `eval_loss` 的 `sft_best`。仅 SFT 模式将它直接合并为完整最终模型；两阶段模式以它的完整合并模型为基础做 PPO，再按原版验证平均 RA reward 选择 `ppo_best`。最后一轮 PPO 也会被验证；平分保留较早者。
+## 两个入口
 
-SFT 的最低 loss 和 PPO 的最高 RA reward 是不同选模标准，均不等于 CityFlow ATT 已最优；测试集不用于选模型。PPO 失败不会自动回退到 SFT 并报告两阶段成功。
+```bash
+# 完整训练；默认读取config/config.yaml
+.venv/bin/python training/collmlight/train_collmlight.py
 
-## 当前小规模参数与原版恢复边界
+# 仅评测，不自动训练；加载本次训练导出的完整最佳模型
+.venv/bin/python run_CoLLMlight.py --run-dir outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
+```
 
-reuse不会按teacher_data.max_samples截断已有文件；该上限属于生成阶段。当前指定输入文件确有5条，启动预检会打印实际复用条数。
+也可在主配置的 `cityflow_test.model_path` 填写完整模型路径，然后直接运行 `run_CoLLMlight.py`。不要同时指定互相冲突的模型路径与run-dir。
 
-当前保持：教师5条（已有文件包含5条）、SFT最多2次更新、每步保存验证，PPO最多4条有效交通记录、2个外层 epoch、batch=4 query、mini_batch=2、累积1、ppo_epochs=1、生成上限1024、短仿真60秒。
+`training.enable_ppo: false` 只执行SFT并导出其验证最佳模型；true执行SFT→合并SFT最佳→PPO→导出PPO验证最佳。SFT用最小验证loss，PPO用最大验证RA reward，平分保留较早者；CityFlow测试不参与选模。
 
-已经恢复原版：每 epoch vLLM 集中 ATR→集中 RA→释放进程→Transformers/TRL 更新，PPO NF4 4bit双重量化、BF16计算、r=8/alpha=16/dropout=0、PEFT默认q/v目标层、奖励白化、按epoch保存。保留批量实际 query 计数、正确加载上一轮 Adapter、模板/token一致及选模权重错位等必要修复。
+## 数据准备模式和输入
 
-**不会因代码还原就默认运行100轮或全量。** `config/ppo_original_reference.yaml` 只记录原仓库100轮、batch32等参数，不会被训练入口读取，也不是完整运行配置。扩容后再将选定参数合并进实际配置。SFT 原版没有完整实现，其设置属于本项目补齐模块，不冒充作者参数。
+| data_preparation | inputs.traffic_samples | inputs.teacher_data |
+| --- | --- | --- |
+| sample_and_generate | 忽略，自动采样 | 忽略，自动生成 |
+| generate_teacher | 必填 | 忽略，自动生成 |
+| reuse，启用PPO | 必填，作为PPO场景输入 | 必填 |
+| reuse，仅SFT | 忽略 | 必填 |
 
-## 实验输出与比较
-
-新实验目录为：
+未启用的输入可设null，不需要额外enable开关。输入数据不会被覆盖。可复用输入分目录存放：
 
 ```text
-outputs/CoLLMLight/<实验名称_年月日_时分秒_微秒>/
-├── manifest.json
-├── config/effective.json        # 固定训练配置，校验摘要
-├── data/                        # 教师数据、SFT转换、PPO划分和原始rollout
+data/FinetuneData/
+├── traffic_samples/SynTrain_sample_all.json
+└── teacher_data/syn_rt_data.json
+```
+
+交通采样含观测、历史、信号效果和Best_Signal，用于教师生成及PPO。教师数据严格采用发布版六字段：atr_user_prompt、atr_output、ra_user_prompt、ra_output、data、complex_level。没有sample_id/teacher_atr_prompt等扩展字段。SFT转换会按交通记录生成内部划分索引，保存在SFT转换结果中，不写回教师原始数据。不接受早期扩展格式，应重新生成。
+
+教师生成采用发布版过滤和随机打乱后的前N条，以及原版easy/complex判断、adaptive ATR后接RA；未自行增加去重排序、多个候选选择等方法。PPO仅跳过缺少历史的初始记录，避免原提示词直接访问history[-1]越界。
+
+## 输出
+
+```text
+outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒/
+├── data/
+│   ├── traffic_samples/          # 本次采样或复制的输入
+│   ├── teacher_data/             # 原生教师数据
+│   ├── sft_data/                 # 必要的SFT转换及训练/验证划分
+│   └── ppo_rollouts/             # 原版生成结果及实际token IDs
 ├── models/
-│   ├── sft_checkpoints/         # attempt/step或epoch对应的保存点
+│   ├── sft_checkpoints/
 │   ├── sft_best/
-│   ├── sft_merged/              # 两阶段需要
-│   ├── ppo_checkpoints/epoch_N/ # 两阶段需要；不逐update保存优化器
-│   ├── ppo_best/                # 两阶段需要
-│   └── trained_best_model/      # 两种模式都有：完整权重、tokenizer和验证清单
+│   ├── sft_merged/
+│   ├── ppo_checkpoints/epoch_N/
+│   ├── ppo_best/
+│   └── trained_best_model/       # 可独立加载的完整权重和tokenizer
 ├── logs/
-├── metrics/                     # 逐步JSONL；不只有终端输出
+├── metrics/
 ├── records/
-├── evaluations/                # 每次评测独立时间戳目录
-└── reports/
+├── reports/
+├── config/
+├── evaluations/                 # 每次CityFlow测试独立归档
+└── manifest.json
 ```
 
-新模型使用 `sft_best/`，历史实验的 `sft_adapter/` 不重命名。失败尝试保留日志，显式恢复同一配置：
+名称自动取算法名和微秒时间戳，不设置qwen15b_smoke等测试前缀。各次训练不覆盖；PPO按epoch保存增量权重，不按每次update保存完整模型。项目根目录不再使用results。模型、配置、必要报告和指标均归档到对应运行目录。
 
-```bash
-.venv/bin/python -m training.collmlight.train_collmlight --config <原配置.yaml> --resume-run <原实验目录>
-```
+PPO训练使用发布版VLLMLocalGenerator、generate_offline_data、prepare_ppo_data_from_offline、evaluate_model和模型/奖励函数；vLLM生成仍先ATR后RA，保留原聊天模板。实际rollout token直接用于TRL，batch_size以query计数（每条交通记录两项）。上一轮LoRA只加载一次并保持可训练；验证分数关联真正被评估的checkpoint，最终轮也验证。vLLM阶段用同一个ppo_ft.py子进程执行，释放CUDA后再训练，没有另一份rollout算法。
 
-PPO先支持已完成epoch边界恢复；原版各epoch重建训练器的规则保留，不宣称从未保存的中间update精确恢复。不能修改模式后原地恢复，也不能把旧 `update_N` checkpoint 静默当新基线继续。
+## 日志与测试
 
-公平比较建议：先用 `enable_ppo: false` 训练；再新建配置设 true，并把 `training.sft_source_run` 指向这份完成的 SFT 实验。新实验复用已验证的同一 SFT Adapter，独立训练 PPO，保留父实验来源和摘要。不要用两次独立 SFT 的随机差异来解释 PPO 增益。所有完整模型文件应视为只读；跨实验复用可能使用相同文件系统的权重硬链接，删除一个目录不会删除另一个目录的模型，不能原地修改共享权重文件。
+SFT/PPO训练、验证、选优数据保存在metrics；教师请求费用用量与阶段耗时在logs/reports/manifest；CityFlow保存交通指标、响应文本、token与车辆观测及车辆CSV。日志不包含API密钥。本地W&B兼容记录、原TensorFlow兼容依赖均沿用已有环境，无需重装。
 
-## 独立运行 CityFlow
+验收直接启动上述两个正式入口，读取主配置；my_tests仅检查输出，不调用另一套训练函数或生成专用训练配置。实际记录见 `my_tests/本轮入口测试结果.md`。
 
-```bash
-.venv/bin/python run_CoLLMlight.py --run-dir <本次训练实验目录>
-```
+## 实现边界
 
-或者在 YAML 的 `cityflow_test.model_path` 填写某份完整模型，省略 `--run-dir`，创建独立评测实验。不要传 Adapter 目录。两个显式来源冲突会报错，不按“最新目录”猜测或退回基础模型。
-
-支持本地 `transformers` 及原兼容 `llama` 服务端协议。服务端必须实际加载指定完整权重，入口先查询 `/v1/models` 核对模型身份。例如在独立终端启动已安装的 vLLM：
-
-```bash
-USE_TF=0 VLLM_USE_V1=0 .venv/bin/python -m vllm.entrypoints.openai.api_server \
-  --model <完整模型绝对路径> --host 127.0.0.1 --port 23333 \
-  --dtype bfloat16 --max-model-len 8192 --gpu-memory-utilization 0.22 --enforce-eager
-
-.venv/bin/python run_CoLLMlight.py --run-dir <实验目录> --backend llama --port 23333
-```
-
-`--model_type llama`、`--model_path`、`--traffic_file`、`--new_max_tokens`、`--disable_psr`、`--num_rounds` 保留常用命令兼容。当前配置使用单GPU；不在这里提供多卡训练调度。
-
-每次评测保存console日志、完整模型/数据身份、车辆CSV、状态/动作、逐步交通指标、逐次SR/RD延迟和token等。原版 `avg_atr_time` 是摊销值；画延迟图应使用 `batch_wall_time_s`。SR奖励的标题数量仍是原公式，不能当生成token数。指标定义沿用原代码，详情见数据字典和报告。
-
-## 可选实验与数据导出
-
-- `--sr-mode original` 默认保持原控制流程；`sync_sr`、`without_sr`、`async_sr`、`stale_sr`、`communication_failure` 显式选择新增实验模式。异步首步无缓存时用空SR，结束时等待未完成任务以完整落盘；结尾排空耗时不当成RD决策延迟。
-- 故障抽样按每个agent决策，独立seed；通信失败最多选一个已有邻居，明确标记不可用。缓存空缺/实际age/故障事件均保留，不能把短程全cache-miss实验当成熟异步效果。
-- `python -m training.collmlight.run_ablation --variant <full|without_pr|without_ar|without_both> --dry-run` 查看独立消融入口。w/o AR采用“原基础模型直接PPO”的明确协议；并非作者未公开设置的复原。w/o Both是未训练基础模型引用，不标成验证最佳微调模型。
-
-```bash
-.venv/bin/python -m training.collmlight.benchmark_inference --run-dir <实验目录> --repeats 2
-.venv/bin/python -m training.collmlight.export_metrics --run-dir <实验目录>
-```
-
-基准输出SR/RD、b=1/5/10的逐次整批时间；短预算64-token测试只验证采集管线，不作为论文性能数据。正式测量应固定提示集合、硬件、后端、生成协议并独占GPU。CSV只导出本实验的字段，不自动拼跨算法表格。
-
-## 环境、测试和限制
-
-主训练栈已实测 Transformers4.51.3、TRL0.9.2、PEFT0.14.0、vLLM0.9.1、bitsandbytes0.46.1、Torch2.7.0+cu126。新增/调整历史见工作区根目录 `new_requirements.txt`，它是变更记录，不是可直接整体安装的锁文件。
-
-旧RL使用原tensorflow-cpu2.8.0。主环境protobuf7.36.2供vLLM等使用；仅在 `.venv/compat/tensorflow28` 隔离安装 protobuf3.20.3，`utils/config.py` 在独立RL进程优先加载它，不替换主环境。若此隔离目录缺失，应按记录安装到该target，不能全局降级protobuf。W&B未安装时使用本地追踪兼容层，不要求网络账号，不影响算法更新。
-
-```bash
-.venv/bin/python -m unittest discover -s my_tests -v
-.venv/bin/python -m unittest discover -s tests -v
-```
-
-真实教师/训练/恢复/CityFlow专项脚本及证据位于 `my_tests/stage3/`；新一轮实测必须重新建立自己的run_index，不能把旧证据当新训练。旧实验若被手动移除，依赖它的旧Adapter/符号链接不会自动变成有效模型，不能改指向另一份不相同的权重。
-
-本轮只完成小规模工程和实验机制验证；未运行100轮、全数据、8B训练或完整论文多算法长时长对比。资源不足时入口在启动前报错，不删除历史实验腾空间。
+发布版方法虽然命名Asynchronous_Reasoning_and_Acting，实际调用先ATR后RA；本项目直接采用该方法，不保留之前自行增加的并行缓存/故障注入路径。论文描述但发布代码未提供的完整多候选最短推理筛选也不自行补造。不能将小样本测试称为完整论文实验或充分训练的模型成绩。

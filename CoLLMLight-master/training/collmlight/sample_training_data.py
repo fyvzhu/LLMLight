@@ -3,7 +3,7 @@ if __package__ in (None, ""):
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-"""Small real CityFlow/FTS sampling run; no teacher or LLM dependencies."""
+"""Run published CityFlow sampling with a configurable decision-step limit."""
 import os
 import random
 from copy import deepcopy
@@ -14,7 +14,8 @@ from utils.training_config import ROOT, TrainingConfig, atomic_json, config_args
 from utils.experiment import exclusive_stage
 
 @exclusive_stage
-def sample(cfg, steps=4):
+def sample(cfg):
+    steps=cfg["SAMPLING_MAX_STEPS"]
     import numpy as np
     from framework.FTSample import FTS
     from utils.env_defaults import dic_traffic_env_conf
@@ -37,7 +38,7 @@ def sample(cfg, steps=4):
                    boundary_distance_threshold=4, ignore_threshold=0, long_info=True,
                    feed_back=True, feed_back_num=1, debug_wollm=False, reward_period=5,
                    accumulate_patience=5, congestion_scale_ratio=0.5,
-                   max_sampling_steps=steps, sample_output=str(output),evaluation_dir=str(cfg.out))
+                   max_sampling_steps=steps or env_conf["RUN_COUNTS"]//env_conf["MIN_ACTION_TIME"], sample_output=str(output),evaluation_dir=str(cfg.out))
     sampler = FTS({'NEW_MAX_TOKENS': 2048, 'MODE': 'fts'}, env_conf, paths,
                   'Synthetic-4_4', env_conf['TRAFFIC_FILE'], options)
     class LocalLogger:
@@ -50,6 +51,5 @@ def sample(cfg, steps=4):
 
 if __name__ == '__main__':
     parser = config_args(__doc__)
-    parser.add_argument('--steps', type=int, default=4)
     args = parser.parse_args()
-    sample(TrainingConfig(args.env_file, config_file=args.config_file, run_dir=args.run_dir), args.steps)
+    sample(TrainingConfig(args.env_file, config_file=args.config_file, run_dir=args.run_dir))

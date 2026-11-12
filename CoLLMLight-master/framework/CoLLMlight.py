@@ -135,14 +135,15 @@ class CoLLMLight:
             self.LLM=ObservedLLM(self.LLM,self.my_config['evaluation_dir'])
 
     def observation_snapshot(self, ids):
-        from utils.sr_experiments import neighbor_lane
+        from utils.inference_logging import neighbor_lane
         snapshots=[]
         for inter_id in ids:
             agent=self.agent_intersection_list[inter_id]
-            observation=deepcopy(agent.traffic_state_log[-self.h_w_size:] if agent.syn_psr else agent.traffic_state_log[-self.h_w_size-1:-1])
+            use_current=agent.syn_psr
+            observation=deepcopy(agent.traffic_state_log[-self.h_w_size:] if use_current else agent.traffic_state_log[-self.h_w_size-1:-1])
             current=observation[-1] if observation else {}
             own=set();neighbor=set();neighbor_ids=set()
-            past=self.history_states[-1] if agent.syn_psr else (self.history_states[-2] if len(self.history_states)>1 else None)
+            past=self.history_states[-1] if use_current else (self.history_states[-2] if len(self.history_states)>1 else None)
             own_count=0;neighbor_count=0
             for lane,item in current.items():
                 if lane in ('Signal','Summary') or not isinstance(item,dict):continue
@@ -435,7 +436,6 @@ class CoLLMLight:
             "total_inference_ct": total_inference_ct}
         logger.log(results)
         os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
-        os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
         with open(str(self.results_dir / 'latest_results/{}.txt').format(self.out_file_name), 'w') as f:
             for key, value in results.items():
                 f.write(f"{key}: {value}\n")
@@ -449,9 +449,6 @@ class CoLLMLight:
         return results
     
     def Asynchronous_Reasoning_and_Acting(self, action_list, decision_making_intersection_id_list, step_num):
-        mode=self.my_config.get('sr_mode','original')
-        if mode not in ('original','sync_sr','without_sr'):
-            return self.experimental_reasoning_and_acting(action_list,decision_making_intersection_id_list,step_num)
         # 1st stage Advance Traffic Reasoning  
 
         advance_traffic_reasoning_output_list, advance_traffic_reasoning_messages_list, atr_total_time_cost = self.advance_traffic_reasoning(decision_making_intersection_id_list, step_num)
@@ -467,43 +464,6 @@ class CoLLMLight:
         time_cost['ra'] = ra_total_time_cost
         return action_list, total_messages_list, atr_score_list, time_cost
     
-    def experimental_reasoning_and_acting(self,actions,ids,step):
-        from utils.sr_experiments import SRCoordinator,choose_failed_neighbor,neighbor_lane
-        from utils.experiment import append_jsonl
-        import random
-        mode=self.my_config['sr_mode']
-        folder=Path(self.my_config['evaluation_dir'])
-        record=lambda row:append_jsonl(folder/'metrics/sr_events.jsonl',row)
-        if not hasattr(self,'sr_coordinator'):
-            self.sr_coordinator=SRCoordinator(self.my_config.get('seed',42),
-                self.my_config.get('stale_probability',0.5) if mode=='stale_sr' else 0.0,record)
-            self.fault_rng=random.Random(self.my_config.get('seed',42)+1009)
-        saved=[]
-        try:
-            if mode=='communication_failure':
-                for index in ids:
-                    agent=self.agent_intersection_list[index]
-                    neighbors=[neighbor_lane(k)[0] for item in agent.traffic_state_log for k in item if neighbor_lane(k) is not None]
-                    failed=choose_failed_neighbor(neighbors,self.fault_rng,self.my_config.get('communication_failure_probability',0.5))
-                    saved.append((agent,agent.traffic_state_log))
-                    if failed is not None:
-                        agent.traffic_state_log=[{k:v for k,v in item.items() if not (neighbor_lane(k) is not None and neighbor_lane(k)[0]==failed)} for item in agent.traffic_state_log]
-                    agent._unavailable_note='' if failed is None else f'\nNeighbor {failed} communication is unavailable; missing data does not mean an empty or uncongested lane.\n'
-                    record({'event':'communication','step':step,'intersection':index,'failed_neighbor':failed,'probability':self.my_config.get('communication_failure_probability',0.5),'scope':'one neighbor per agent decision'})
-            outputs=self.sr_coordinator.consume(step,ids)
-            prompts=[self.agent_intersection_list[i].advance_traffic_reasoning_prompt(step)+getattr(self.agent_intersection_list[i],'_unavailable_note','') for i in ids]
-            snapshots=self.observation_snapshot(ids)
-            # Prompts and observations are frozen on the simulation thread before submission.
-            def inference():
-                self.LLM.set_context(module='SR',step=step,intersections=list(ids),observations=snapshots)
-                texts=self.LLM.batch_ask(prompts,system_prompt=SYSTEM_PROMPT,disable_thinking=True)
-                return [self.extract_after_think_tag(t) for t in texts]
-            self.sr_coordinator.submit(step,ids,inference)
-            actions,ra_messages,used,ra_time=self.reactive_action(actions,outputs,ids,step)
-            sr_messages=[[{'role':'assistant','content':o}] for o in outputs]
-            return actions,[a+b for a,b in zip(sr_messages,ra_messages)],used,{'atr':0.0,'ra':ra_time}
-        finally:
-            for agent,history in saved:agent.traffic_state_log=history;agent._unavailable_note=''
 
     def advance_traffic_reasoning(self, decision_making_intersection_id_list, step_num):
         decision_making_1st_prompts_list = []

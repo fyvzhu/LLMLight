@@ -31,3 +31,13 @@ class ObservedLLM:
         return outputs
     def ask(self,prompt,system_prompt='You are a helpful AI assistant.',**kwargs):
         return self.batch_ask([prompt],system_prompt,**kwargs)[0]
+
+
+def neighbor_lane(key):
+    """Identify observed neighboring lanes for logging; never affects control."""
+    import re
+    if isinstance(key,tuple) and len(key)==2:return key
+    if isinstance(key,str):
+        match=re.search(r"(?:upstream|downstream) lane \((\d+), ['\"]?([A-Z]{2})['\"]?\)",key)
+        if match:return int(match.group(1)),match.group(2)
+    return None

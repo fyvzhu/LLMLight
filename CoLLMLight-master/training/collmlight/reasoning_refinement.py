@@ -1,6 +1,11 @@
+if __package__ in (None, ''):
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import argparse
+from utils.training_config import TrainingConfig
 from utils.LLMs import LLAMA_model
-from utils.training_rewards import calculate_reactive_action_reward, calculate_advance_reasoning_reward
+from training.collmlight.ppo_ft import calculate_reactive_action_reward, calculate_advance_reasoning_reward
 import json
 import re
 from tqdm import tqdm
@@ -13,11 +18,15 @@ from utils.prompts import *
 def main():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model_path', type=str, default="Your model path", help='Path to the model')
+    parser.add_argument('--run-dir', required=True, help='Existing run containing the traffic samples')
     args = parser.parse_args()
     model_path = args.model_path
 
-    root_path = './data/FinetuneData/'
-    init_file_path = root_path + 'SynTrain_sample_all.json'
+    cfg = TrainingConfig(run_dir=args.run_dir)
+    output = cfg.data_dir / 'refinement'
+    output.mkdir(parents=True, exist_ok=True)
+    root_path = str(output) + '/'
+    init_file_path = cfg.path('TRAFFIC_SAMPLE_PATH')
 
     with open(init_file_path, 'r') as file:
         init_data_list = json.load(file)

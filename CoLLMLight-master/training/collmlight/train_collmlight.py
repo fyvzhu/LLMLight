@@ -32,15 +32,23 @@ def preflight(cfg):
     if cfg['SFT_SAVE_STRATEGY'] != cfg['SFT_EVAL_STRATEGY'] or cfg['SFT_SAVE_STRATEGY'] not in ('epoch','steps'):
         raise ValueError('SFT save/eval strategies must match (epoch or steps)')
     if not cfg.path('STUDENT_MODEL_PATH').joinpath('config.json').is_file():raise FileNotFoundError('Student model missing')
+    mode=cfg['DATA_PREPARATION']
+    needs_traffic=mode=='generate_teacher' or (cfg['ENABLE_PPO'] and mode!='sample_and_generate')
+    if needs_traffic and (not cfg['TRAFFIC_INPUT_PATH'] or not cfg.path('TRAFFIC_INPUT_PATH').is_file()):
+        raise FileNotFoundError('inputs.traffic_samples is required for this mode')
     teacher_records=None
     if not cfg['SFT_SOURCE_RUN']:
-        if cfg['DATA_PREPARATION'] == 'reuse' and not cfg.path('TEACHER_OUTPUT_PATH').is_file():
-            raise FileNotFoundError('Teacher data missing; explicitly select generate_teacher to make paid calls')
-        if cfg['DATA_PREPARATION']=='reuse':
-            teacher_records=len(read_json(cfg.path('TEACHER_OUTPUT_PATH')))
-            if teacher_records<2:raise ValueError('SFT needs at least two distinct traffic records for train/validation')
-        if cfg['DATA_PREPARATION'] != 'reuse':
-            if cfg['TEACHER_MAX_SAMPLES']==1:raise ValueError('Total training needs at least two teacher records; use the standalone generator for one-record API probes')
+        if mode=='reuse':
+            if not cfg['TEACHER_INPUT_PATH'] or not cfg.path('TEACHER_INPUT_PATH').is_file():
+                raise FileNotFoundError('inputs.teacher_data is required for reuse')
+            rows=read_json(cfg.path('TEACHER_INPUT_PATH'))
+            fields={'atr_user_prompt','atr_output','ra_user_prompt','ra_output','data','complex_level'}
+            if not isinstance(rows,list) or any(set(row)!=fields or 'sample_id' in row['data'] for row in rows):
+                raise ValueError('Expected original ICLR ATR/RA teacher data; regenerate old extended-format files')
+            teacher_records=len(rows)
+            if teacher_records<2:raise ValueError('SFT requires at least two teacher records')
+        else:
+            if cfg['TEACHER_MAX_SAMPLES']==1:raise ValueError('SFT requires at least two teacher records')
             cfg.secret()
     else:
         if not cfg['ENABLE_PPO']:raise ValueError('sft_source_run is for continuing a prior SFT into PPO')
@@ -83,6 +91,7 @@ def preflight(cfg):
 
 
 def run_stage(cfg, name, module, extra=()):
+    import time
     manifest=read_json(cfg.out/'manifest.json')
     if manifest['stages'].get(name,{}).get('state') in ('completed','reused'):return
     attempts=sorted((cfg.out/'logs').glob(name+'_attempt_*.log'))
@@ -96,11 +105,13 @@ def run_stage(cfg, name, module, extra=()):
     from utils.source_snapshot import snapshot
     before=snapshot(cfg.out/'config'/f'{name}_{len(attempts)+1}_code_before.json')
     with log.open('x') as stream:
+        started=time.perf_counter()
         result=subprocess.run(command,cwd=ROOT,env=env,stdout=stream,stderr=subprocess.STDOUT)
+        elapsed=time.perf_counter()-started
     after=snapshot(cfg.out/'config'/f'{name}_{len(attempts)+1}_code_after.json')
     if before['files']!=after['files']:
         append_jsonl(cfg.out/'logs/events.jsonl',{'event':'code_changed_during_stage','stage':name})
-    stage_state(cfg.out,name,'completed' if result.returncode==0 else 'failed',returncode=result.returncode,log=str(log.relative_to(cfg.out)))
+    stage_state(cfg.out,name,'completed' if result.returncode==0 else 'failed',returncode=result.returncode,log=str(log.relative_to(cfg.out)),elapsed_seconds=elapsed)
     if result.returncode:raise RuntimeError(f'{name} failed: inspect {log}')
 
 
@@ -110,7 +121,8 @@ def train(cfg, resume=None):
     if resume:
         frozen=read_json(folder/'config/effective.json')
         expected=dict(cfg.values)
-        if cfg['DATA_PREPARATION']=='sample_and_generate':expected['TRAFFIC_SAMPLE_PATH']=str(folder/'data/traffic_samples.json')
+        expected['TRAFFIC_SAMPLE_PATH']=str(folder/'data/traffic_samples/SynTrain_sample_all.json')
+        expected['TEACHER_OUTPUT_PATH']=str(folder/'data/teacher_data/syn_rt_data.json')
         if digest(expected)!=digest(frozen):raise ValueError('Resume configuration changed; use a new experiment')
         if read_json(folder/'manifest.json')['state']=='completed':raise ValueError('Experiment already completed')
     cfg=TrainingConfig(cfg.env_file,config_file=cfg.config_file,run_dir=folder)
@@ -124,23 +136,23 @@ def train(cfg, resume=None):
     try:
         atomic_json(folder/'reports/preflight.json',plan)
         m=read_json(folder/'manifest.json');m['state']='running';atomic_json(folder/'manifest.json',m)
+        mode=cfg['DATA_PREPARATION']
+        if mode=='sample_and_generate':
+            run_stage(cfg,'sample','sample_training_data')
+        elif mode=='generate_teacher' or cfg['ENABLE_PPO']:
+            target=cfg.path('TRAFFIC_SAMPLE_PATH')
+            if not target.exists():shutil.copy2(cfg.path('TRAFFIC_INPUT_PATH'),target)
         if cfg['SFT_SOURCE_RUN']:
             source=cfg.path('SFT_SOURCE_RUN')
-            for rel in ['models/sft_best','data/sft_data']:
+            for rel in ['models/sft_best','data/sft_data','data/teacher_data']:
                 target=folder/rel
                 if not target.exists():shutil.copytree(source/rel,target)
-            if not (folder/'data/selected_samples.json').exists():shutil.copy2(source/'data/selected_samples.json',folder/'data/selected_samples.json')
             m=read_json(folder/'manifest.json');m.update(parent_run=str(source),source_sft=read_json(source/'models/sft_best/best_model.json'))
             atomic_json(folder/'manifest.json',m);stage_state(folder,'sft','reused',parent_run=str(source))
         else:
-            if cfg['DATA_PREPARATION']=='sample_and_generate':
-                run_stage(cfg,'sample','sample_training_data')
-            if cfg['DATA_PREPARATION']=='reuse':
-                original=TrainingConfig(cfg.env_file,config_file=cfg.config_file).path('TEACHER_OUTPUT_PATH')
+            if mode=='reuse':
                 target=cfg.path('TEACHER_OUTPUT_PATH')
-                if not target.exists():shutil.copy2(original,target)
-                rows=read_json(target)
-                atomic_json(folder/'data/selected_samples.json',[dict(r['data'],sample_id=r['sample_id']) for r in rows])
+                if not target.exists():shutil.copy2(cfg.path('TEACHER_INPUT_PATH'),target)
             else:run_stage(cfg,'teacher','reasoning_tuning_data_synth')
             run_stage(cfg,'prepare','prepare_sft_data')
             run_stage(cfg,'sft','run_sft')

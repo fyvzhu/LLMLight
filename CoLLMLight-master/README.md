@@ -1,7 +1,5 @@
 # CoLLMLight: Cooperative Large Language Model Agents for Network-Wide Traffic Signal Control
 
-> 本工作区训练入口已迁移为 `training/collmlight/train_collmlight.py`；通过 `config/config.yaml` 的 `training.enable_ppo` 选择仅SFT或SFT＋PPO。`run_CoLLMlight.py` 只做CityFlow评测。新产物按算法/独立实验归档，完整模型位于该实验的 `models/trained_best_model/`。实际命令、环境与限制见 [TRAINING.md](TRAINING.md)，下文原版命令仅作历史参考。
-
 Official implementation for **CoLLMLight**, accepted by ICLR 2026.
 
 ## Table of Contents
@@ -63,41 +61,59 @@ For example, the New York benchmark uses:
 <a id="quick-start"></a>
 ## 4. Quick Start
 
-The updated local inference entry loads the full model configured in `config/config.yaml` (`cityflow_test.model_path`). By default it uses `outputs/<run_name>/trained_best_model/`. Run from the project directory with the existing uv environment:
+To run inference with a trained model, follow these steps.
+
+**Step 1: Deploy the LLM Inference Server**
+
+Deploy your chosen LLM with an OpenAI-compatible local inference service such as `lmdeploy` or `vllm`. The `model_path` should be a local path or Hugging Face-compatible model identifier.
 
 ```bash
-.venv/bin/python run_CoLLMlight.py --config config/config.yaml
+# Example using lmdeploy
+lmdeploy serve api_server /path/to/your/llm --tp <num_gpus>
 ```
 
-The tested backend is local Transformers; no inference server is required. Original HTTP client classes remain available, but remote serving is outside this workspace's integration test.
+**Step 2: Run the Simulation**
+
+Set the complete model path in `config/config.yaml`, or select a training run:
+
+```bash
+.venv/bin/python run_CoLLMlight.py --run-dir outputs/CoLLMLight/CoLLMLight_<timestamp>
+```
+
+The configured `transformers` backend can also load a local complete model directly, without a separate inference server.
 
 <a id="training-workflow"></a>
 ## 5. Training Workflow
 
-See [TRAINING.md](TRAINING.md) for configuration, data sampling, real teacher generation, TRL LoRA-SFT, SFT merge, LoRA-PPO, checkpoint recovery, best full-model export and CityFlow testing.
+Use the existing project environment and the single main configuration `config/config.yaml`:
 
 ```bash
-.venv/bin/python my_tests/run_real_stages.py teacher
-.venv/bin/python my_tests/run_real_stages.py prepare
-.venv/bin/python my_tests/run_real_stages.py sft
-.venv/bin/python my_tests/run_real_stages.py merge
-.venv/bin/python my_tests/run_real_stages.py ppo
-.venv/bin/python export_best_model.py
-.venv/bin/python my_tests/run_cityflow_model_smoke.py
+.venv/bin/python training/collmlight/train_collmlight.py
 ```
 
-Run real CityFlow sampling first if `data/FinetuneData/SynTrain_sample_all.json` is missing. Teacher generation uses paid API calls and resumes completed examples. Do not blindly rerun training in an existing experiment directory; choose a new `experiment.run_name`.
+`training.data_preparation` selects simulation sampling plus teacher generation, generation from an existing traffic sample file, or existing teacher data. `training.enable_ppo` selects SFT-only or SFT followed by PPO. Teacher generation uses the published ATR/RA functions and six-field data format. The added SFT stage connects to the published PPO implementation with the required batch, adapter-loading and validation fixes.
+
+Each run stores its model, logs and metrics under `outputs/CoLLMLight/CoLLMLight_<timestamp>/`. The final `models/trained_best_model/` is a complete independently loadable model. See [TRAINING.md](TRAINING.md) for input activation rules and commands. Teacher/student credentials remain in `.env`.
 
 <a id="api-configuration"></a>
-## 6. Configuration
+## 6. API Configuration
 
-- `.env` / `.env.example`: teacher and student model settings; the real API key belongs only in `.env` or the process environment.
-- `config/config.yaml`: data tasks, LoRA-SFT, LoRA-PPO, export and CityFlow test settings. The obsolete `ppo_config.yaml` is no longer used.
-- `llm_models/`: downloaded foundation models; `models/` remains the traffic agent source directory.
-- `my_tests/`: added tests and execution logs; `tests/` retains the original regression tests.
-- `outputs/<run_name>/trained_best_model/`: validation-checked, standalone full inference model.
+`utils/LLMs.py` supports OpenAI-compatible teacher services. This project loads the configured teacher parameters and secret variable name from `.env`; see `.env.example`. The original upstream API conventions are:
 
-All relative configuration paths resolve against this project directory. See [the second-round test report](my_tests/第二轮测试结果.md) for actual validation scope and results.
+- `OPENAI_API_KEY`: API key for the chat completion service.
+- `OPENAI_BASE_URL`: Base URL for an OpenAI-compatible API. Defaults to `https://api.openai.com/v1`.
+- `OPENAI_API_URL`: Full chat completions URL. If set, this takes priority over `OPENAI_BASE_URL`.
+
+Examples:
+
+```bash
+# Official OpenAI endpoint
+export OPENAI_API_KEY="your_api_key"
+
+# Custom OpenAI-compatible endpoint
+export OPENAI_API_KEY="your_api_key"
+export OPENAI_BASE_URL="https://your-endpoint.example.com/v1"
+```
 
 <a id="citation"></a>
 ## 7. Citation
