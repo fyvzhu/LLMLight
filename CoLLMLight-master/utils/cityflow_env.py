@@ -558,7 +558,7 @@ class CityFlowEnv:
             sys.exit()
 
         # touch new inter_{}.pkl (if exists, remove)
-        for inter_ind in range(self.dic_traffic_env_conf["NUM_INTERSECTIONS"]):
+        for inter_ind in range(self.dic_traffic_env_conf["NUM_INTERSECTIONS"] if self.dic_traffic_env_conf["MODEL_NAME"] not in ('CoLLMLight','FTS') else 0):
             path_to_log_file = os.path.join(self.path_to_log, "inter_{0}.pkl".format(inter_ind))
             f = open(path_to_log_file, "wb")
             f.close()

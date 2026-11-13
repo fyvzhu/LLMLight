@@ -54,10 +54,6 @@ def prepare(cfg):
         atomic_json(folder / f'{split}.json', data)
     atomic_json(folder / 'split_manifest.json', manifest)
     atomic_json(folder / 'conversion_report.json', reports)
-    atomic_json(folder / 'dataset_info.json', {
-        f'collmlight_{s}': {'file_name': f'{s}.json',
-                          'columns': {'prompt': 'instruction', 'query': 'input',
-                                      'response': 'output', 'system': 'system'}} for s in datasets})
     print({s: len(d) for s, d in datasets.items()}, 'SFT examples; RA mismatches are reported, never relabeled')
     return datasets
 

@@ -68,7 +68,7 @@ sft:
 
 保持与该运行相同的训练配置。总入口跳过已完成阶段，SFT从同次运行最近的完整标准checkpoint恢复模型、优化器、调度器、随机数及数据进度，日志按新的attempt追加。没有checkpoint且SFT尚未开始更新时从头启动；非空旧Adapter目录、缺少状态文件或数据/配置/版本不一致时明确失败，不静默改成权重续训，不维护旧格式兼容。旧Adapter不能补回以前未保存的优化器与随机数状态。
 
-checkpoint中已完成全部计划更新、但外层阶段尚未写完成报告时，只整理最佳归档和报告，不多执行一次更新。`sft_report.json`区分累计updates、此次new_updates和恢复起点resumed_step；最佳权重变化统计也明确其参照。中断后最多回退到最近一次完整保存，不恢复尚未保存的梯度或更新。同环境续训一致性需实测，不承诺任意硬件/版本间逐位一致。
+checkpoint中已完成全部计划更新、但外层阶段尚未写完成报告时，只整理最佳归档和报告，不多执行一次更新。`manifest.json`的`stages.sft.summary`区分累计updates、此次new_updates和恢复起点resumed_step；最佳权重变化统计也明确其参照。中断后最多回退到最近一次完整保存，不恢复尚未保存的梯度或更新。同环境续训一致性需实测，不承诺任意硬件/版本间逐位一致。
 
 本轮真实模型及恢复状态的详细验收见`my_tests/SFT断点续训测试结果.md`。Trainer返回的train_loss属于本次调用的汇总，跨中断的完整学习曲线应读取按step记录的`sft_train.jsonl`，不能直接比较不同调用的汇总loss。
 
@@ -99,28 +99,47 @@ data/FinetuneData/
 
 ```text
 outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒/
-├── data/
-│   ├── traffic_samples/          # 本次采样或复制的输入
-│   ├── teacher_data/             # 原生教师数据
-│   ├── sft_data/                 # 必要的SFT转换及训练/验证划分
-│   └── ppo_rollouts/             # 原版生成结果及实际token IDs
-├── models/
-│   ├── sft_checkpoints/checkpoint-N/ # Trainer原生完整训练状态
-│   ├── sft_best/
-│   ├── sft_merged/
-│   ├── ppo_checkpoints/epoch_N/
-│   ├── ppo_best/
-│   └── trained_best_model/       # 可独立加载的完整权重和tokenizer
-├── logs/
-├── metrics/
-├── records/
-├── reports/
+├── manifest.json                # 阶段状态、attempt、各阶段简要结果、最终模型位置
 ├── config/
-├── evaluations/                 # 每次CityFlow测试独立归档
-└── manifest.json
+│   ├── effective.json           # 本次冻结配置；恢复时使用
+│   ├── environment.json         # 环境、依赖版本、GPU信息
+│   └── code.json                # 每次运行仅一份代码身份
+├── data/
+│   ├── traffic_samples/         # 本次采样或复制的交通输入
+│   ├── teacher_data/            # 发布版六字段教师数据
+│   ├── sft_data/                # train/eval、划分索引、转换拒绝原因
+│   └── ppo_split.json           # PPO样本划分、来源及交叠计数
+├── models/
+│   ├── sft_checkpoints/checkpoint-N/ # Trainer完整训练状态；按save_total_limit轮换
+│   ├── sft_best/                # 验证最佳SFT Adapter及加载、选优元数据
+│   ├── sft_merged/              # PPO依赖的完整SFT基础模型
+│   ├── ppo_checkpoints/epoch_N/  # 保持按epoch保存增量权重
+│   ├── ppo_best/                # 最佳Adapter；不可变模型文件与对应checkpoint硬链接
+│   └── trained_best_model/      # 独立完整模型；model_manifest.json内保存唯一导出验收
+├── logs/
+│   ├── train.log                # 全阶段及vLLM子进程共用；恢复时追加
+│   ├── events.jsonl             # 阶段状态转换和耗时
+│   └── teacher_requests.jsonl   # 教师请求、用量和失败信息
+├── metrics/                    # SFT/PPO逐步训练、验证、选优及生成统计
+├── records/sampling/            # 采样车辆原始CSV等
+└── evaluations/数据集_年月日_时分秒_微秒/
+    ├── config.json             # 实际评测参数、模型/数据指纹和服务身份
+    ├── summary.json            # 唯一最终指标、有效动作计数和运行状态
+    ├── logs/console.log
+    ├── metrics/
+    │   ├── traffic.jsonl        # 每步交通指标、队列及等待汇总
+    │   ├── inference.jsonl      # SR/RD实际批量、整批耗时及生成参数
+    │   └── tokens.jsonl         # 逐响应token、截断标记、观测车辆数；用batch_id关联
+    └── records/
+        ├── llm_responses.jsonl  # Prompt/响应原文仅在这里保存
+        └── simulation/         # CityFlow车辆到达/离开CSV等原始记录
 ```
 
-名称自动取算法名和微秒时间戳，不设置qwen15b_smoke等测试前缀。各次训练不覆盖；PPO按epoch保存增量权重，不按每次update保存完整模型。项目根目录不再使用results。模型、配置、必要报告和指标均归档到对应运行目录。
+仅产生实际执行阶段所需文件。名称固定使用算法名和微秒时间戳；不设置额外实验前缀。训练不覆盖旧运行，同一模型多路网/多种子评测在同一运行的evaluations下创建不同目录。通过显式模型路径独立启动评测时会新建运行目录；通过`--run-dir`评测时不会再创建第二个训练目录。
+
+不再生成reports目录、各阶段code_before/after副本、重复导出报告、integration_report、metrics.json、legacy_results、history_data整包转存、自动图表、未使用的dataset_info和env_rl_data。PPO指标只写标量统计，不保存token级训练数组；rollout的完整token IDs仍直接用于原TRL更新，成功提交epoch checkpoint后清理临时副本。失败时保留`tmp/`排错。仿真输入副本、导出过程文件也遵循成功后清理、失败保留，不删除正式模型或原始输入。
+
+模型内config、Tokenizer、Adapter配置和原生checkpoint的optimizer、scheduler、RNG、trainer_state必须保留，它们属于模型格式或续训状态。PPO最佳与epoch权重使用同文件系统硬链接节约空间；可变进度与验证元数据独立复制。不要原地编辑这些模型文件；复制最佳Adapter用于外部修改时使用普通复制。
 
 PPO训练使用发布版VLLMLocalGenerator、generate_offline_data、prepare_ppo_data_from_offline、evaluate_model和模型/奖励函数；vLLM生成仍先ATR后RA，保留原聊天模板。实际rollout token直接用于TRL，batch_size以query计数（每条交通记录两项）。上一轮LoRA只加载一次并保持可训练；验证分数关联真正被评估的checkpoint，最终轮也验证。vLLM阶段用同一个ppo_ft.py子进程执行，释放CUDA后再训练，没有另一份rollout算法。
 
@@ -130,11 +149,13 @@ SFT转换、PPO奖励和CityFlow共用`utils/training_rewards.py`的RA解析规�
 
 ## 日志与测试
 
-SFT/PPO训练、验证、选优数据保存在metrics；教师请求费用用量与阶段耗时在logs/reports/manifest；CityFlow保存交通指标、响应文本、token与车辆观测及车辆CSV。日志不包含API密钥。本地W&B兼容记录、原TensorFlow兼容依赖均沿用已有环境，无需重装。
+SFT/PPO训练、验证、选优数据保存在metrics；各阶段摘要在manifest中，终端输出统一追加到train.log，并标记stage、attempt及vLLM epoch。教师用量在teacher_requests；密钥不写入日志。完整模型来源与验收只在model_manifest.json保存，运行manifest仅引用其位置。
 
-验收直接启动上述两个正式入口，读取主配置；my_tests仅检查输出，不调用另一套训练函数或生成专用训练配置。实际记录见 `my_tests/本轮入口测试结果.md`。
+后续分析项目可使用评测summary中的ATT/AWT/AQL比较算法，使用traffic逐步指标绘制交通曲线，使用SR/RD整批耗时和实际batch_size分析延迟，使用逐次token及车辆数分析推理长度与交通复杂度；模型、路网、种子、生成配置用于区分实验条件。必须剔除或单独统计finish_reason=length的截断样本，不能把PPO的标题计数奖励当作token长度。多种子汇总、显著性检验和画图在后处理项目完成，这里不重复输出派生表格。当前服务适配器记录输出logprobs的token计数，尚未保存完整输入token用量，不能据此覆盖全部部署成本分析。
 
-本轮RA解析、导出协议和服务接入修复的实际记录见`my_tests/解析与评估收敛测试结果.md`。
+日志只记录实际执行的行为。正式延迟比较需用固定后端、预热和重复批量实验；单次普通CityFlow耗时不能替代完整基准。当前代码没有实现的异步对照、鲁棒性扰动、人工评分及额外消融，不能仅凭增加日志宣称已覆盖相应论文实验。
+
+验收直接启动正式训练和评测入口，临时修改主配置中的普通参数后恢复，不维护另一份训练配置。测试代码与本轮结果见`my_tests/test_output_storage.py`、`my_tests/test_cli_results.py`和`my_tests/输出精简测试结果.md`；无新增依赖。
 
 ## 实现边界
 

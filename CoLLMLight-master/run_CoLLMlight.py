@@ -48,7 +48,7 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
                MODEL_NAME='CoLLMLight',PROJECT_NAME='local',
                LIST_STATE_FEATURE=['cur_phase','traffic_movement_pressure_queue'],
                DIC_REWARD_INFO={'queue_length':-0.25})
-    from utils.experiment import create_evaluation
+    from utils.experiment import create_evaluation,clean_workspace
     if cfg.run_dir:
         parent=cfg.out
     elif cfg['CITYFLOW_MODEL_PATH'] or model_path:
@@ -56,48 +56,56 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
         parent=create_run(cfg)
     else:raise ValueError('Choose an explicit --run-dir or full model path')
     folder=create_evaluation(parent,dataset)
-    paths={'PATH_TO_MODEL':str(folder/'model'),'PATH_TO_WORK_DIRECTORY':str(folder/'records/simulation'),
-           'PATH_TO_DATA':str(data_path)}
+    paths={'PATH_TO_MODEL':str(folder/'tmp/simulation/model'),
+           'PATH_TO_WORK_DIRECTORY':str(folder/'tmp/simulation/work'),
+           'PATH_TO_LOG':str(folder/'records/simulation'),'PATH_TO_DATA':str(data_path)}
     runtime=dict(llm_path=str(model_path),llm_type=cfg['CITYFLOW_BACKEND'],memo=cfg['RUN_NAME'],
                  dataset=dataset,debug_wollm=False,max_tokens=cfg['CITYFLOW_MAX_NEW_TOKENS'],
                  communication_threshold=0,h_w_size=5,disable_psr=cfg['CITYFLOW_DISABLE_SR'],dtype='auto',
                  port=cfg['CITYFLOW_PORT'],evaluation_dir=str(folder),seed=cfg['CITYFLOW_SEED'])
-    if cfg['CITYFLOW_BACKEND']=='llama':
+    from utils.experiment import evaluation_logging
+    with evaluation_logging(folder):
+        from training.collmlight.export_best_model import weights_fingerprint,file_hash
+        configuration={'parameters':cfg.values,'environment':env,'runtime':runtime,
+            'hardware':{'scope':'local visible devices; server allocation must be fixed separately for latency experiments',
+                'torch':torch.__version__,'cuda':torch.version.cuda,
+                'gpus':[{'name':torch.cuda.get_device_name(i),'total_memory_bytes':torch.cuda.get_device_properties(i).total_memory}
+                    for i in range(torch.cuda.device_count())]},
+            'data':{'traffic_file':traffic_file,'roadnet_file':roadnet,
+                    'traffic_sha256':file_hash(data_path/traffic_file),'roadnet_sha256':file_hash(data_path/roadnet)},
+            'model':{'path':str(model_path),'weights':weights_fingerprint(model_path)}}
+        atomic_json(folder/'config.json',configuration)
         import requests
         session=requests.Session();session.trust_env=False
         response=session.get(f'http://127.0.0.1:{cfg["CITYFLOW_PORT"]}/v1/models',timeout=15)
         response.raise_for_status();served=response.json()
         if not any(item.get('id')==str(model_path) or item.get('root')==str(model_path) for item in served.get('data',[])):
             raise ValueError('Inference server does not serve the requested complete model')
-        atomic_json(folder/'config/server_identity.json',served)
-    from utils.experiment import evaluation_logging
-    with evaluation_logging(folder):
+        configuration['server_identity']=served
+        atomic_json(folder/'config.json',configuration)
         controller=CoLLMLight({'NEW_MAX_TOKENS':runtime['max_tokens'],'MODE':'collmlight'},env,paths,net,traffic_file,runtime)
         class LocalLogger:
-            def log(self,values):atomic_json(folder/'metrics.json',values)
+            def log(self,values):pass # The returned final metrics are saved once in summary.json.
         if cfg['CITYFLOW_SYNCHRONOUS_SR']:
             for agent in controller.agent_intersection_list:agent.syn_psr=True
         metrics=controller.test(LocalLogger(),0)
-        decisions=[]
-        for intersection,records in controller.history_data['llm_resulst'].items():
+        valid_decisions=0
+        for records in controller.history_data['llm_resulst'].values():
             for record in records:
-                messages=record['decision_making_messages']
-                raw=messages[-1]['content']
-                try:parsed=parse_action(raw)
-                except ValueError:parsed=None
-                decisions.append({'intersection':intersection,'step':record['step'],'action':parsed,'response':raw})
-        report={'dataset':dataset,'traffic_file':traffic_file,'roadnet_file':roadnet,'seed':cfg['CITYFLOW_SEED'],'disable_sr':cfg['CITYFLOW_DISABLE_SR'],'synchronous_sr':cfg['CITYFLOW_SYNCHRONOUS_SR'],'model_path':str(model_path),'backend':cfg['CITYFLOW_BACKEND'],
-                'run_counts':steps,'llm_calls':getattr(controller.LLM,'calls',None),
-                'decisions':decisions,'valid_decisions':sum(d['action'] is not None for d in decisions),
+                raw=record['decision_making_messages'][-1]['content']
+                try:parse_action(raw)
+                except ValueError:continue
+                valid_decisions+=1
+        report={'state':'running','kind':'evaluation','configuration':'config.json',
+                'dataset':dataset,'seed':cfg['CITYFLOW_SEED'],'model_path':str(model_path),
+                'backend':cfg['CITYFLOW_BACKEND'],'run_counts':steps,
+                'llm_calls':getattr(controller.LLM,'calls',None),'valid_decisions':valid_decisions,
                 'fallback_decisions':metrics['LLM fail num'],'metrics':metrics}
-        atomic_json(folder/'reports/integration_report.json',report)
-        atomic_json(folder/'config/effective.json',cfg.values)
-        from training.collmlight.export_best_model import weights_fingerprint,file_hash
-        atomic_json(folder/'config/data_identity.json',{'traffic_sha256':file_hash(data_path/traffic_file),'roadnet_sha256':file_hash(data_path/roadnet)})
-        atomic_json(folder/'config/model_identity.json',{'model_path':str(model_path),'weights':weights_fingerprint(model_path)})
+        atomic_json(folder/'summary.json',report)
+        clean_workspace(folder,folder/'tmp/simulation')
         print('CityFlow full model:',model_path,'LLM calls:',report['llm_calls'],
               'valid actions:',report['valid_decisions'],'fallbacks:',report['fallback_decisions'],flush=True)
-        return report
+    return {**report,'state':'completed'}
 
 
 

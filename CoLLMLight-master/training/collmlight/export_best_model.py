@@ -56,7 +56,7 @@ def best_source(cfg):
     return source,meta,evaluation
 
 
-from utils.experiment import exclusive_stage
+from utils.experiment import exclusive_stage, training_log, stage_summary
 
 @exclusive_stage
 def export_best(cfg):
@@ -75,13 +75,16 @@ def export_best(cfg):
         manifest=read_json(target/'model_manifest.json')
         if manifest['source_signature']!=signature or weights_fingerprint(target)!=manifest['exported_weights']:
             raise ValueError('Existing export does not match this best checkpoint')
-        require_full_model(target);return target
+        require_full_model(target)
+        stage_summary(cfg,'export',{'model_path':str(target),'model_manifest':'models/trained_best_model/model_manifest.json'})
+        return target
     target.parent.mkdir(parents=True,exist_ok=True)
     source_bytes=sum(p.stat().st_size for p in base.glob('*.safetensors'))
     scale=2 if cfg['EXPORT_DTYPE']=='float32' else 1
     if shutil.disk_usage(target.parent).free<source_bytes*scale+128*2**20:
         raise RuntimeError('Insufficient free space for the selected full-model export dtype')
-    temp=Path(tempfile.mkdtemp(prefix='.export-',dir=target.parent))
+    (cfg.out/'tmp').mkdir(exist_ok=True)
+    temp=Path(tempfile.mkdtemp(prefix='export-',dir=cfg.out/'tmp'))
     try:
         tokenizer=tokenizer_for(base)
         model=AutoModelForCausalLM.from_pretrained(base,local_files_only=True,torch_dtype=torch.float32,attn_implementation='sdpa').to(cfg['EXPORT_DEVICE'])
@@ -115,31 +118,36 @@ def export_best(cfg):
         # Release local integrity-check models before starting the vLLM process.
         del client,saved_logits,ref_logits;gc.collect();torch.cuda.empty_cache()
         output=temp/'official_inference_check.json'
-        attempts=len(list((cfg.out/'logs').glob('export_inference_attempt_*.log')))+1
-        logfile=cfg.out/'logs'/f'export_inference_attempt_{attempts}.log'
+        logfile=cfg.out/'logs/train.log'
         env=dict(os.environ,USE_TF='0',VLLM_USE_V1='0',VLLM_WORKER_MULTIPROC_METHOD='spawn',TOKENIZERS_PARALLELISM='false')
         command=[sys.executable,'-m','training.collmlight.ppo_ft','--config',str(cfg.config_file),'--run-dir',str(cfg.out),
             '--evaluate-model',str(temp),'--output',str(output)]
         if cfg.env_file:command+=['--env-file',str(cfg.env_file)]
-        with logfile.open('x') as log:
+        with training_log(cfg,'export integrity through official PPO protocol') as log:
             result=subprocess.run(command,cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT)
         if result.returncode:raise RuntimeError(f'Official-protocol export integrity inference failed: {logfile}')
         validated=read_json(output)
+        output.unlink()
         report={'independent_full_model_load':True,'fp32_merge_max_error':error,'saved_precision_max_error':saved_error,
             'tokenizer_matches_base':tokenizer_matches,'model_config_matches_base':config_matches,
-            'saved_dtype':dtype,'selection_validation':selection,'official_inference_check':validated,
+            'saved_dtype':dtype,'official_inference_check':validated,
             'protocol_note':'Integrity only. Uses published PPO inference; never reselects best or supplies CityFlow ATT/AWT/AQL.'}
         manifest={'source_signature':signature,'training_mode':read_json(cfg.out/'manifest.json')['training_mode'],
             'selected_stage':stage,'best_checkpoint':meta['checkpoint'],'validation_metric':meta['metric'],
             'validation_score':meta['score'],'source_base':str(base),'source_adapter':str(source),
-            'source_adapter_sha256':meta['adapter_sha256'],'dtype':dtype,'exported_weights':weights_fingerprint(temp),'standalone':True,'validated':True}
-        atomic_json(temp/'model_manifest.json',manifest);atomic_json(temp/'export_validation_report.json',report)
+            'source_adapter_sha256':meta['adapter_sha256'],'dtype':dtype,'exported_weights':weights_fingerprint(temp),
+            'standalone':True,'validated':True,'validation':report}
+        atomic_json(temp/'model_manifest.json',manifest)
         require_full_model(temp);temp.rename(target)
-        cfg.report('export_report.json',{'model_path':str(target),'manifest':manifest,'validation':report})
+        stage_summary(cfg,'export',{'model_path':str(target),'model_manifest':'models/trained_best_model/model_manifest.json'})
+        from utils.experiment import clean_workspace
+        clean_workspace(cfg.out,temp)
         print('Exported best full model:',target,flush=True)
         return target
-    finally:
-        if temp.exists():shutil.rmtree(temp)
+    except BaseException:
+        # Preserve failed export files for inspection; published target is never partial.
+        print('Export failed; workspace retained:',temp,flush=True)
+        raise
 
 
 if __name__=='__main__':

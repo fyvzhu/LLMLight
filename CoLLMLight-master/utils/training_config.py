@@ -244,9 +244,6 @@ class TrainingConfig:
             name = 'sft_best'
         return self.model_dir / name
 
-    def report(self, name, value):
-        atomic_json((self.out/'reports' if self.run_dir else self.out)/name, value)
-
     @property
     def export_dir(self):
         return self.path('EXPORT_OUTPUT_DIR') if self['EXPORT_OUTPUT_DIR'] else self.model_dir / 'trained_best_model'
@@ -261,13 +258,6 @@ class TrainingConfig:
         if not value:
             raise ValueError(f'Missing teacher API key environment variable: {name}')
         return value
-
-    def snapshot(self):
-        # Only known nonsecret keys are saved. Never serialize self.raw.
-        if self.run_dir:
-            return  # immutable effective.json is written once by the experiment creator
-        atomic_json(self.out / 'resolved_config.json', self.values)
-
 
 def config_args(description):
     parser = argparse.ArgumentParser(description=description)

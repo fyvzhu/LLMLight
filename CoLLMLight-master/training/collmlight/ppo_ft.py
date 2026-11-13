@@ -7,7 +7,7 @@ import gc,json,time,os,shutil,random,subprocess,sys
 from pathlib import Path
 from utils.prompts import SYSTEM_PROMPT,get_atr_user_prompt_wsys,get_ra_user_prompt_wsys
 from utils.training_config import ROOT,TrainingConfig,atomic_json,read_json,digest,config_args
-from utils.experiment import metrics,exclusive_stage
+from utils.experiment import metrics,exclusive_stage,stage_summary,training_log,clean_workspace,link_model_file
 
 class VLLMLocalGenerator:
     """Local VLLM generator, supports dynamic reloading of LoRA weights."""
@@ -117,7 +117,7 @@ class VLLMLocalGenerator:
             outputs = self.llm.generate(formatted_prompts, self.sampling_params)
 
         self.last_batch=[{'query_ids':list(out.prompt_token_ids),'response_ids':list(out.outputs[0].token_ids)} for out in outputs]
-        if self.cfg:
+        if self.cfg and getattr(self,'record_metrics',True):
             metrics(self.cfg,getattr(self,'metrics_name','ppo_inference'),{'purpose':getattr(self,'purpose','training_rollout'),'module':getattr(self,'module','unknown'),'split':getattr(self,'split','unknown'),'batch_size':len(prompts),'batch_wall_time_s':time.perf_counter()-started,'completion_tokens':[len(r['response_ids']) for r in self.last_batch]})
         responses = [output.outputs[0].text for output in outputs]
         return responses
@@ -340,17 +340,17 @@ def split_records(cfg):
 
 
 def rollout(cfg, epoch, train, evaluation, adapter):
-    folder=cfg.data_dir/'ppo_rollouts';folder.mkdir(parents=True,exist_ok=True)
-    attempt=len(list(folder.glob(f'epoch_{epoch}_attempt_*_request.json')))+1
-    request=folder/f'epoch_{epoch}_attempt_{attempt}_request.json';output=folder/f'epoch_{epoch}_attempt_{attempt}.json'
+    folder=cfg.out/'tmp/ppo_rollouts'/f'epoch_{epoch}_{time.time_ns()}'
+    folder.mkdir(parents=True,exist_ok=False)
+    request=folder/'request.json';output=folder/'output.json'
     atomic_json(request,{'run_dir':str(cfg.out),'adapter':str(adapter) if adapter else None,
         'groups':{'train':train,'eval':evaluation}})
-    log=cfg.out/'logs'/f'vllm_epoch_{epoch}_attempt_{len(list((cfg.out/"logs").glob(f"vllm_epoch_{epoch}_attempt_*")))+1}.log'
+    log=cfg.out/'logs/train.log'
     env=dict(os.environ,USE_TF='0',VLLM_USE_V1='0',TOKENIZERS_PARALLELISM='false',VLLM_WORKER_MULTIPROC_METHOD='spawn')
-    with log.open('x') as f:
+    with training_log(cfg,f'vllm epoch={epoch} workspace={folder.name}') as f:
         result=subprocess.run([sys.executable,'-m','training.collmlight.ppo_ft','--rollout-request',str(request),'--output',str(output)],cwd=ROOT,env=env,stdout=f,stderr=subprocess.STDOUT)
     if result.returncode:raise RuntimeError(f'vLLM epoch rollout failed: {log}')
-    return read_json(output)
+    return read_json(output),folder
 
 def generate_rollout(request_path,output_path):
     request=read_json(request_path)
@@ -372,7 +372,8 @@ def select_best(cfg, epoch, evaluation, updates):
     checkpoint=cfg.artifact('ppo_checkpoints')/f'epoch_{epoch}'
     score=evaluation['ra_reward']
     metrics(cfg,'ppo_eval',{'epoch':epoch,'updates':updates,'checkpoint':str(checkpoint),'metric':'ra_reward','score':score,'atr_reward':evaluation['atr_reward']})
-    atomic_json(checkpoint/'evaluation.json',evaluation)
+    atomic_json(checkpoint/'evaluation.json',{'ra_reward':evaluation['ra_reward'],'atr_reward':evaluation['atr_reward'],
+        'sample_count':len(evaluation['examples'])})
     best=cfg.artifact('ppo_best')
     if best.exists() and score<=read_json(best/'best_model.json')['score']:return
     meta={'checkpoint':str(checkpoint.relative_to(cfg.out)),'epoch':epoch,'update':updates,'score':score,
@@ -380,7 +381,7 @@ def select_best(cfg, epoch, evaluation, updates):
     atomic_json(checkpoint/'best_model.json',meta)
     temporary=best.with_name('.ppo_best_new');old=best.with_name('.ppo_best_old')
     if temporary.exists():shutil.rmtree(temporary)
-    shutil.copytree(checkpoint,temporary)
+    shutil.copytree(checkpoint,temporary,copy_function=link_model_file)
     if best.exists():best.rename(old)
     temporary.rename(best)
     if old.exists():shutil.rmtree(old)
@@ -415,7 +416,7 @@ def run(cfg):
             updates=read_json(target/'progress.json')['updates'];continue
         if target.exists():raise FileExistsError(f'Incomplete checkpoint must be inspected, not overwritten: {target}')
         previous=checkpoints/f'epoch_{epoch-1}' if epoch>1 else None
-        generated=rollout(cfg,epoch,train,evaluation,previous)
+        generated,workspace=rollout(cfg,epoch,train,evaluation,previous)
         score=generated['evaluation']
         if previous:select_best(cfg,epoch-1,score,updates)
         else:metrics(cfg,'ppo_eval',{'epoch':0,'stage':'initial_sft_reference','ra_reward':score['ra_reward']})
@@ -426,7 +427,7 @@ def run(cfg):
         if not all(('lora_' in n or 'v_head' in n) for n in trainable):raise RuntimeError('Unexpected trainable base parameters')
         rows=generated['train'];usable=len(rows)//per_batch*per_batch
         metrics(cfg,'ppo_epoch',{'epoch':epoch,'traffic_records':len(rows),'used_records':usable,'dropped_tail':len(rows)-usable,
-            'backend':'vllm','quantization_bits':cfg['PPO_QUANTIZATION_BITS'],'whiten_rewards':cfg['PPO_WHITEN_REWARDS'],'trainable_parameters':trainable,
+            'backend':'vllm','quantization_bits':cfg['PPO_QUANTIZATION_BITS'],'whiten_rewards':cfg['PPO_WHITEN_REWARDS'],'trainable_tensor_count':len(trainable),
             'optimizer_lifecycle':'reinitialized_each_epoch','value_head_lifecycle':'reinitialized_each_epoch'})
         for start in range(0,usable,per_batch):
             queries,responses,rewards=prepare_ppo_data_from_offline(rows[start:start+per_batch],tokenizer,trainer.accelerator.device)
@@ -436,7 +437,8 @@ def run(cfg):
                 if key in stats and not __import__('numpy').isfinite(stats[key]).all():raise RuntimeError(f'Non-finite {key}')
             metrics(cfg,'ppo_train',{'epoch':epoch,'global_update':updates,'query_count':len(queries),
                 'atr_reward':sum(r['reward_atr'] for r in rows[start:start+per_batch])/per_batch,
-                'ra_reward':sum(r['reward_ra'] for r in rows[start:start+per_batch])/per_batch,'statistics':stats})
+                'ra_reward':sum(r['reward_ra'] for r in rows[start:start+per_batch])/per_batch,
+                'statistics':{key:float(value) for key,value in stats.items() if __import__('numpy').ndim(value)==0}})
         changed=weight_change(trainer.model,before)
         frozen_after=frozen_fingerprint(trainer.model)
         if frozen_before!=frozen_after:raise RuntimeError("Frozen base weights changed")
@@ -445,12 +447,16 @@ def run(cfg):
         temporary.mkdir();trainer.save_pretrained(str(temporary));tokenizer.save_pretrained(temporary)
         atomic_json(temporary/'progress.json',{'epoch':epoch,'updates':updates,'changed_trainable_tensors':len(changed),'changed_lora_tensors':sum('lora_' in n for n in changed),'changed_value_head_tensors':sum('v_head' in n for n in changed),'frozen_base_unchanged':frozen_before==frozen_after,'frozen_weights_sha256':frozen_after})
         atomic_json(temporary/'complete.json',{'epoch':epoch});temporary.rename(target)
+        clean_workspace(cfg.out,workspace)
         del trainer,tokenizer,before,queries,responses,rewards;gc.collect();torch.cuda.empty_cache()
     final=checkpoints/f"epoch_{cfg['PPO_NUM_EPOCHS']}"
-    generated=rollout(cfg,'final',[],evaluation,final)
+    generated,workspace=rollout(cfg,'final',[],evaluation,final)
     select_best(cfg,cfg['PPO_NUM_EPOCHS'],generated['evaluation'],updates)
-    cfg.report('ppo_report.json',{'epochs':cfg['PPO_NUM_EPOCHS'],'updates':updates,'backend':'vllm',
-        'best':read_json(cfg.artifact('ppo_best')/'best_model.json'),'counts':counts,'save_strategy':'epoch'})
+    best=read_json(cfg.artifact('ppo_best')/'best_model.json')
+    stage_summary(cfg,'ppo',{'epochs':cfg['PPO_NUM_EPOCHS'],'updates':updates,'backend':'vllm',
+        'best_model':'models/ppo_best','best_checkpoint':best['checkpoint'],'best_score':best['score'],
+        'counts':counts,'save_strategy':'epoch'})
+    clean_workspace(cfg.out,workspace)
 
 
 def evaluate_full_model(cfg,model_path,output_path):
@@ -465,13 +471,14 @@ def evaluate_full_model(cfg,model_path,output_path):
     # One held-out record is sufficient for integrity; full selection already ran.
     records=records[:1]
     generator=VLLMLocalGenerator(str(model_path),max_model_len=cfg['STUDENT_MAX_LENGTH'],cfg=cfg)
-    generator.metrics_name='export_inference';generator.purpose='model_integrity_only';generator.split='integrity'
+    generator.record_metrics=False
     try:
         evaluate_model(generator,records)
         for row in generator.evaluation['examples']:
             if not row['atr'].strip():raise RuntimeError('Empty SR during export integrity inference')
             parse_action(row['ra'])
-        result=dict(generator.evaluation,purpose='model_integrity_only',used_for_best_selection=False,
+        result=dict(checked_records=len(records),valid_actions=len(generator.evaluation['examples']),
+            purpose='model_integrity_only',used_for_best_selection=False,
             protocol='published PPO evaluate_model + *_user_prompt_wsys',backend='vllm',
             batch_size=len(records),temperature=cfg['PPO_TEMPERATURE'],top_k=cfg['PPO_TOP_K'],top_p=cfg['PPO_TOP_P'],
             max_new_tokens=cfg['PPO_MAX_NEW_TOKENS'],seed=cfg['RANDOM_SEED'])

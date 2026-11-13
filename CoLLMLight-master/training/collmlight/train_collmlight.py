@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 from utils.training_config import ROOT, TrainingConfig, atomic_json, read_json, config_args, digest
-from utils.experiment import create_run, stage_state, append_jsonl
+from utils.experiment import create_run, stage_state, append_jsonl, stage_summary, training_log
 
 
 def preflight(cfg):
@@ -89,21 +89,21 @@ def run_stage(cfg, name, module, extra=()):
     import time
     manifest=read_json(cfg.out/'manifest.json')
     if manifest['stages'].get(name,{}).get('state') in ('completed','reused'):return
-    attempts=sorted((cfg.out/'logs').glob(name+'_attempt_*.log'))
-    log=cfg.out/'logs'/f'{name}_attempt_{len(attempts)+1}.log'
-    stage_state(cfg.out,name,'running',log=str(log.relative_to(cfg.out)))
+    attempt=manifest['stages'].get(name,{}).get('attempt',0)+1
+    log=cfg.out/'logs/train.log'
+    stage_state(cfg.out,name,'running',attempt=attempt,log='logs/train.log')
     command=[sys.executable,'-m','training.collmlight.'+module,'--config',str(cfg.config_file),'--run-dir',str(cfg.out)]
     if cfg.env_file:command+=['--env-file',str(cfg.env_file)]
     command+=list(extra)
     env=dict(os.environ,USE_TF='0',PYTHONUNBUFFERED='1',TOKENIZERS_PARALLELISM='false',WANDB_MODE='disabled')
     print('Stage:',name,'log:',log,flush=True)
     from utils.source_snapshot import snapshot
-    before=snapshot(cfg.out/'config'/f'{name}_{len(attempts)+1}_code_before.json')
-    with log.open('x') as stream:
+    before=snapshot()
+    with training_log(cfg,f'stage={name} attempt={attempt}') as stream:
         started=time.perf_counter()
         result=subprocess.run(command,cwd=ROOT,env=env,stdout=stream,stderr=subprocess.STDOUT)
         elapsed=time.perf_counter()-started
-    after=snapshot(cfg.out/'config'/f'{name}_{len(attempts)+1}_code_after.json')
+    after=snapshot()
     if before['files']!=after['files']:
         append_jsonl(cfg.out/'logs/events.jsonl',{'event':'code_changed_during_stage','stage':name})
     stage_state(cfg.out,name,'completed' if result.returncode==0 else 'failed',returncode=result.returncode,log=str(log.relative_to(cfg.out)),elapsed_seconds=elapsed)
@@ -129,7 +129,7 @@ def train(cfg, resume=None):
         lock_stream.close();raise RuntimeError('This experiment already has an active training process')
     lock_stream.seek(0);lock_stream.truncate();lock_stream.write(str(os.getpid()));lock_stream.flush()
     try:
-        atomic_json(folder/'reports/preflight.json',plan)
+        stage_summary(cfg,'preflight',plan)
         m=read_json(folder/'manifest.json');m['state']='running';atomic_json(folder/'manifest.json',m)
         mode=cfg['DATA_PREPARATION']
         if mode=='sample_and_generate':

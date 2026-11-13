@@ -10,7 +10,7 @@ import time
 from utils.LLMs import GPT_model
 from utils.prompts import *
 from utils.training_config import TrainingConfig,atomic_json,read_json,config_args
-from utils.experiment import exclusive_stage,append_jsonl
+from utils.experiment import exclusive_stage,append_jsonl,stage_summary
 LLM = None
 
 def extract_json(response):
@@ -199,7 +199,6 @@ def synthesize(cfg):
     random.Random(cfg['TEACHER_RANDOM_SEED']).shuffle(data_list)
     maximum=cfg['TEACHER_MAX_SAMPLES']
     if maximum and len(data_list)>maximum:
-        atomic_json(cfg.data_dir/'traffic_samples/env_rl_data.json',data_list[maximum:])
         data_list=data_list[:maximum]
     if len(data_list)<2:raise ValueError('At least two eligible traffic records are required for SFT train/validation')
     output=cfg.path('TEACHER_OUTPUT_PATH')
@@ -217,7 +216,7 @@ def synthesize(cfg):
             'ra_user_prompt':ra_user_prompt,'ra_output':ra_results,'data':data,'complex_level':complex_level})
         atomic_json(output,total_data)
         print(f'Teacher completed {len(total_data)}/{len(data_list)}',flush=True)
-    cfg.report('teacher_report.json',{'input_records':len(init_data_list),'selected':len(data_list),
+    stage_summary(cfg,'teacher',{'input_records':len(init_data_list),'selected':len(data_list),
         'completed':len(total_data),'resumed_records':resumed,'requests_this_run':LLM.requests_count,'usage_this_run':LLM.usage})
     return total_data
 

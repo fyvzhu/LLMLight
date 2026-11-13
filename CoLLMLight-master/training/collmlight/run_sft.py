@@ -9,7 +9,7 @@ from pathlib import Path
 import math
 import shutil
 from transformers import TrainerCallback, TrainerState
-from utils.experiment import exclusive_stage, metrics
+from utils.experiment import exclusive_stage, metrics, stage_summary
 from training.collmlight.export_best_model import file_hash, weights_fingerprint
 
 
@@ -174,7 +174,6 @@ def run(cfg):
     from utils.training_models import (seed_all, dtype_for, tokenizer_for, load_student,
                                        lora_for, versions, trainable_snapshot)
     seed_all(cfg['RANDOM_SEED'])
-    cfg.snapshot()
     versions(cfg)
     tokenizer = tokenizer_for(cfg.path('STUDENT_MODEL_PATH'))
     tokenizer.padding_side = 'right'
@@ -197,7 +196,8 @@ def run(cfg):
             'resume_from_checkpoint':str(resume),'train_loss':None,'eval_loss':best['score'],
             'best':best,'changed_lora_tensors':0,'finalized_completed_checkpoint':True,
             'train_examples':len(datasets['train']),'eval_examples':len(datasets['eval'])}
-        cfg.report('sft_report.json',report);print(report,flush=True)
+        stage_summary(cfg,'sft',{k:v for k,v in report.items() if k!='best'} | {'best_model':'models/sft_best','best_checkpoint':best['checkpoint']})
+        print(report,flush=True)
         return report
     model = load_student(cfg, cfg.path('STUDENT_MODEL_PATH'), 'SFT')
     args = SFTConfig(output_dir=str(checkpoint_root),
@@ -239,7 +239,7 @@ def run(cfg):
         'eval_loss': best['score'], 'best':best,
         'changed_lora_tensors':len(changed), 'weight_change_reference':'restored adapter to final selected best',
         'train_examples':len(datasets['train']),'eval_examples':len(datasets['eval'])}
-    cfg.report('sft_report.json',report)
+    stage_summary(cfg,'sft',{k:v for k,v in report.items() if k!='best'} | {'best_model':'models/sft_best','best_checkpoint':best['checkpoint']})
     print(report)
 
 

@@ -79,7 +79,12 @@ def versions(cfg):
         report[name] = importlib.metadata.version(name)
     report['cuda'] = torch.version.cuda
     report['gpu'] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
-    cfg.report('versions.json', report)
+    from .training_config import read_json
+    path=cfg.out/'config/environment.json'
+    environment=read_json(path)
+    environment['packages'].update({k:v for k,v in report.items() if k not in ('cuda','gpu')})
+    environment.update(cuda=report['cuda'],gpu=report['gpu'],gpu_count=torch.cuda.device_count())
+    atomic_json(path,environment)
 
 
 def trainable_snapshot(model):

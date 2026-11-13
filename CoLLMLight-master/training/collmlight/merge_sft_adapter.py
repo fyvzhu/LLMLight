@@ -7,7 +7,7 @@ if __package__ in (None, ""):
 from utils.training_config import TrainingConfig, atomic_json, config_args
 
 
-from utils.experiment import exclusive_stage
+from utils.experiment import exclusive_stage, stage_summary
 
 @exclusive_stage
 def merge(cfg):
@@ -31,7 +31,7 @@ def merge(cfg):
                 if str(a).endswith(('.safetensors','.bin')):return os.link(a,b)
                 return shutil.copy2(a,b)
             shutil.copytree(source,path,copy_function=clone)
-            cfg.report('merge_report.json',{'merged_model':str(path),'reused_sft_full_model':str(source),
+            stage_summary(cfg,'merge',{'merged_model':str(path),'reused_sft_full_model':str(source),
                 'storage':'immutable weight hardlinks; each model directory remains independently loadable'})
             print('Verified SFT full weights reused:',path)
             return
@@ -51,7 +51,7 @@ def merge(cfg):
     # Save compact BF16/FP16-compatible weights; compare merge itself in FP32 above.
     model.to(torch.bfloat16).save_pretrained(path, safe_serialization=True)
     tokenizer.save_pretrained(path)
-    cfg.report('merge_report.json', {'max_logit_difference_fp32': error,
+    stage_summary(cfg,'merge', {'max_logit_difference_fp32': error,
         'source_model': str(cfg.path('STUDENT_MODEL_PATH')), 'sft_adapter': str(cfg.artifact('sft_adapter')),
         'merged_model': str(path), 'saved_dtype': 'bfloat16'})
     print('SFT merged:', path, 'max logit difference:', error)

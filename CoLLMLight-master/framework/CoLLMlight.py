@@ -5,7 +5,6 @@ from utils.LLMs import *
 from models.CoLLMLightAgent import *
 import os
 import time
-import datetime
 import numpy as np
 from utils.cityflow_env import CityFlowEnv
 from utils.prompts import SYSTEM_PROMPT
@@ -49,9 +48,6 @@ class CoLLMLight:
         self.num_row = dic_traffic_env_conf['NUM_ROW']
         self.trafficflow = trafficflow
         self.my_config = my_config
-        self.results_dir = Path(my_config.get('evaluation_dir', dic_path['PATH_TO_WORK_DIRECTORY'])) / 'reports' / 'legacy_results'
-        for subdir in ['latest_results','visualization','state_action_log','perf_logs','llm_responses_log','state_img']:
-            (self.results_dir/subdir).mkdir(parents=True,exist_ok=True)
         self.memo = my_config['memo']
         self.history_data = None
         
@@ -66,7 +62,6 @@ class CoLLMLight:
         self.ignore_occupancy_threshold = my_config['communication_threshold']
         self.h_w_size = my_config['h_w_size']
         self.car_spacing = 9 
-        self.state_action_log = {}
         self.signal_list = list(four_phase_list.keys())
         self.debug_wollm = my_config['debug_wollm']
         self.disable_psr = my_config['disable_psr']
@@ -78,8 +73,9 @@ class CoLLMLight:
         path_check(self.dic_path)
         copy_conf_file(self.dic_path, self.dic_agent_conf, self.dic_traffic_env_conf)
         copy_cityflow_file(self.dic_path, self.dic_traffic_env_conf)
+        os.makedirs(self.dic_path["PATH_TO_LOG"],exist_ok=True)
         self.env = CityFlowEnv(
-            path_to_log=self.dic_path["PATH_TO_WORK_DIRECTORY"],
+            path_to_log=self.dic_path["PATH_TO_LOG"],
             path_to_work_directory=self.dic_path["PATH_TO_WORK_DIRECTORY"],
             dic_traffic_env_conf=self.dic_traffic_env_conf,
             dic_path=self.dic_path
@@ -91,8 +87,6 @@ class CoLLMLight:
         self.llm_init()
         self.agent_init()
         self.release_data = []
-        timestamp = datetime.datetime.now().strftime('%Y%m%d')
-        self.out_file_name = f"{self.memo}-{self.dataset_name}-{timestamp}"
     
     def agent_init(self):
         traffic_env_conf = {}
@@ -154,7 +148,7 @@ class CoLLMLight:
             snapshots.append({'own_vehicle_count':own_count,'neighbor_vehicle_count':neighbor_count,
                 'observed_vehicle_union_count':len(own|neighbor) if past is not None else None,
                 'vehicle_count_scope':'lanes in latest SR historical observation; unique vehicle IDs when available',
-                'observation':observation,'observed_neighbor_ids':list(neighbor_ids)})
+                'observed_neighbor_ids':list(neighbor_ids)})
         return snapshots
 
     def history_data_init(self):
@@ -341,12 +335,10 @@ class CoLLMLight:
                     prompt_response_dict['decision_making_messages'] = decision_making_messages_list[decision_making_intersection_id_list.index(inter_id)]
                     prompt_response_dict['atr_score'] = atr_score_list[decision_making_intersection_id_list.index(inter_id)]
                     self.history_data['llm_resulst'][inter_name].append(prompt_response_dict)
-            self.save_llm_response_data(self.history_data['llm_resulst'])
             
             next_state, _, done, _ = self.env.step(action_list)
             next_states, next_outputs = self.process_state(next_state)
             last_action_list = action_list[:]
-            # self.save_action_log(current_states, action_list, next_states, step_num)
             
             # self.update_history_data(current_states, next_states, current_outputs, next_outputs, action_list)
             # global_indicator = {}
@@ -401,7 +393,8 @@ class CoLLMLight:
                 from utils.experiment import append_jsonl
                 append_jsonl(Path(self.my_config['evaluation_dir'])/'metrics/traffic.jsonl',
                     {'step':step_num,'simulation_time':current_time,'queue_network_sum':sum(queue_length_inter),
-                     'queue_by_intersection':queue_length_inter,'waiting_vehicle_times':dict(self.env.waiting_vehicle_list),
+                     'queue_by_intersection':queue_length_inter,
+                     'waiting_vehicle_count':len(waiting_times),'waiting_time_sum':sum(waiting_times),
                      'AWT':awt,'AQL':aql,'ATT':att,'throughput':throughput,
                      'definitions':'original CoLLMLight: AQL=time-mean network queue sum; AWT=time-mean stopped-vehicle mean wait; ATT=sum intersection residence per vehicle'})
             self.history_data['perf']['AWT'].append(awt)
@@ -412,9 +405,6 @@ class CoLLMLight:
             # self.show_boundary_data()
             # self.show_car_num()
             last_veh_num = veh_num
-            # self.visualize(next_states)
-            # self.save_performance_data(self.history_data['perf'])
-            # self.plot_performance_data()
         total_travel_time = self.calc_avg_travel_time()
         throughput = self.calc_throughput()
         
@@ -432,14 +422,8 @@ class CoLLMLight:
             "avg_ra_time": total_ra_time/total_inference_ct if total_inference_ct else 0.0,
             "total_inference_ct": total_inference_ct}
         logger.log(results)
-        os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
-        with open(str(self.results_dir / 'latest_results/{}.txt').format(self.out_file_name), 'w') as f:
-            for key, value in results.items():
-                f.write(f"{key}: {value}\n")
-        print("Test Round:", test_round, results)
-        f_history_data = os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "history_data.json")
-        dump_json(self.history_data, f_history_data)
-        print("Testing time: ", time.time() - start_time)
+        print('Test Round:', test_round, results)
+        print('Testing time:', time.time()-start_time)
 
         self.env.batch_log_2()
 
@@ -524,65 +508,8 @@ class CoLLMLight:
     
 
     
-    def plot_coordination_distribution(self, no_coordination_history, simple_coordination_history, complex_coordination_history, avg_infer_speed, total_step_num):  
-        import matplotlib.pyplot as plt
-        # Create the directory if it doesn't exist  
-        save_dir = str(self.results_dir / 'visualization')
-        os.makedirs(save_dir, exist_ok=True)  
-        
-        # Construct the full file path  
-        save_path = os.path.join(save_dir, f'nsc-{self.out_file_name}.png')  
-        
-        # Create figure and primary axis  
-        fig, ax1 = plt.subplots(figsize=(12, 7))  
-        
-        # Plot coordination scenarios on primary y-axis  
-        ax1.plot(range(len(no_coordination_history)), no_coordination_history,   
-                label='No Coordination', marker='o', color='blue')  
-        ax1.plot(range(len(simple_coordination_history)), simple_coordination_history,   
-                label='Simple Coordination', marker='s', color='green')  
-        ax1.plot(range(len(complex_coordination_history)), complex_coordination_history,   
-                label='Complex Coordination', marker='^', color='red')  
-        
-        # Set primary axis details  
-        ax1.set_xlabel('Step')  
-        ax1.set_ylabel('Coordination Scenario Percentage (%)')  
-        ax1.set_xlim(0, total_step_num - 1)  
-        ax1.set_xticks(range(0, total_step_num, max(1, total_step_num // 10)))  
-        ax1.set_ylim(0, 100)  
-        ax1.grid(True, linestyle='--', alpha=0.7)  
-        
-        # Create secondary y-axis for inference speed  
-        ax2 = ax1.twinx()  
-        ax2.plot(range(len(avg_infer_speed)), avg_infer_speed,   
-                label='Avg Inference Speed', color='purple', linewidth=2)  
-        ax2.set_ylabel('Average Inference Time (seconds)')  
-        
-        # Combine legends  
-        lines1, labels1 = ax1.get_legend_handles_labels()  
-        lines2, labels2 = ax2.get_legend_handles_labels()  
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')  
-        
-        plt.title('Coordination Scenario Distribution and Inference Speed')  
-        plt.tight_layout()  
-        
-        # Save the plot  
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')  
-        plt.close() 
     
-        # print(f"Coordination scenario visualization saved to: {save_path}")  
 
-    def save_action_log(self, current_states, action_list, next_states, step_num):
-        self.state_action_log[step_num] = {}
-        for i in range(len(current_states)):
-            self.state_action_log[step_num][i] = {}
-            self.state_action_log[step_num][i]['state'] = current_states[i]
-            self.state_action_log[step_num][i]['action'] = self.signal_list[action_list[i]]
-            self.state_action_log[step_num][i]['next_state'] = next_states[i]
-            self.state_action_log[step_num][i]['name'] = self.intersection_list[i]
-            self.state_action_log[step_num][i]['neighbor'] = self.get_neighbor_list(i)
-        with open(str(self.results_dir / 'state_action_log/{}.json').format(self.out_file_name), 'w') as f:
-            json.dump(self.state_action_log, f, indent=4)
     
     # communicate_lanes = self.adaptive_communication(communicate_data_check_prompt_list, communicate_data_location_list)
     def adaptive_communication(self, communicate_data_check_prompt_list, communicate_data_location_list):
@@ -1056,70 +983,8 @@ class CoLLMLight:
 
         return congest_lane_list, congest_degree_list, queue_num_list, avg_wait_time_list
     
-    def save_performance_data(self, data):
-        # Load existing data
-        filename = f'{self.out_file_name}.json'
-        filepath = str(self.results_dir / 'perf_logs/')+ filename
-        perf_data = {}    
-        perf_data[self.memo] = data
-        # Add or update method data
-        # Save updated data
-        with open(filepath, 'w') as f:
-            json.dump(perf_data, f, indent=4)
     
-    def save_llm_response_data(self, data):
-        # Load existing data
-        directory = str(self.results_dir / f'llm_responses_log/')
-        filename = os.path.join(directory, f'{self.out_file_name}.json')
-        
-        # 确保目录存在（包括中间目录）
-        os.makedirs(directory, exist_ok=True)
-        llm_data = {}    
-        llm_data[self.memo] = data
-        with open(filename, 'w') as f:
-            json.dump(llm_data, f, indent=4)
 
-    def plot_performance_data(self):
-        import matplotlib.pyplot as plt
-        # Load data
-        matching_files = []
-        for root, dirs, files in os.walk(str(self.results_dir / 'perf_logs/')):
-            for file in files:
-                if file.endswith('.json'):
-                    parts = file.split('-')
-                    if len(parts) == 3:
-                        file_dataset = parts[1]
-                        if file_dataset == self.dataset_name:
-                            file_path = os.path.join(root, file)
-                            matching_files.append(file_path)
-        perf_data = {}
-        for file_path in matching_files:
-            try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-            except FileNotFoundError:
-                data = {}
-            perf_data.update(data)
-
-        # Define colors
-        colors = plt.cm.get_cmap('tab10', len(perf_data))
-
-        # Create subplots for AWT, AQL, ATT
-        fig, axes = plt.subplots(3, 1, figsize=(20, 15))
-        metrics = ['AWT', 'AQL', 'ATT']
-        
-        for i, metric in enumerate(metrics):
-            ax = axes[i]
-            for j, (method_name, method_data) in enumerate(perf_data.items()):
-                ax.plot(method_data[metric], label=method_name, color=colors(j))
-            ax.set_title(metric)
-            ax.legend()
-            ax.set_xlabel('Index')
-            ax.set_ylabel(metric)
-        
-        plt.tight_layout()
-        plt.savefig(str(self.results_dir / 'state_img/{}_performance_plots.png').format(self.dataset_name))
-        plt.show()
 
     def calc_avg_travel_time(self):
         current_time = self.env.get_current_time()
@@ -1190,83 +1055,6 @@ class CoLLMLight:
     def show_car_num(self):
         print("car_num inside: {}, ql_num inside: {}".format(len(self.history_data['veh_log']['inside_list']), self.history_data['car_num_inside']['waiting'][-1]))
     
-    def visualize(self, states):
-        import matplotlib.pyplot as plt
-        """
-        更新交通情况热度图。
-        
-        参数：
-        ql_num (ndarray): 28x7的汽车队列长度数据。
-        wait_time (ndarray): 28x7的等待时间数据。
-        """
-        # 清除当前图形
-        ql_num = []
-        wait_time = []
-        release_data = self.release_data
-        for state in states:
-            ql = 0
-            wt = 0
-            for lane in location_all_direction_dict:
-                ql += state[lane]['queue_len']
-                veh_list = list(state[lane]['veh2cell'].keys())
-                # wt += state[lane]['queue_len'] * state[lane]['avg_wait_time']
-                wt += sum([state[lane]['wait_time'][veh] for veh in veh_list])
-            ql_num.append(ql)
-            wait_time.append(wt)
-        ql_num = np.array(ql_num)
-        wait_time = np.array(wait_time)
-        release_data = np.array(release_data)
-        ql_num = np.rot90(ql_num.reshape(self.num_col, self.num_row))
-        wait_time = np.rot90(wait_time.reshape(self.num_col, self.num_row))
-        release_data = np.rot90(release_data.reshape(self.num_col, self.num_row))
-        plt.clf()
-        
-        # 创建一个包含两个子图的图形
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 20))
-
-        # 绘制汽车队列长度热度图
-        im1 = ax1.imshow(ql_num, cmap='Reds', aspect='equal', interpolation='none', vmin=0, vmax=max(100, np.max(ql_num)))
-        ax1.set_title('Traffic Queue Length Heatmap')
-        ax1.set_xlabel('Intersection')
-        ax1.set_ylabel('Street')
-        ax1.set_xticks(np.arange(self.num_col))
-        ax1.set_xticklabels([f'{i+1}' for i in range(self.num_col)])
-        ax1.set_yticks(np.arange(self.num_row))
-        ax1.set_yticklabels([f'{i}' for i in np.arange(self.num_row, 0, -1)])
-        cbar1 = plt.colorbar(im1, ax=ax1)
-        # cbar1.set_label('Queue Length')
-
-        # 绘制等待时间热度图
-        im2 = ax2.imshow(wait_time, cmap='Blues', aspect='equal', interpolation='none', vmin=0, vmax=max(20000, np.max(wait_time)))
-        ax2.set_title('Traffic Wait Time Heatmap')
-        ax2.set_xlabel('Intersection')
-        ax2.set_ylabel('Street')
-        ax2.set_xticks(np.arange(self.num_col))
-        ax2.set_xticklabels([f'{i+1}' for i in range(self.num_col)])
-        ax2.set_yticks(np.arange(self.num_row))
-        ax2.set_yticklabels([f'{i}' for i in np.arange(self.num_row, 0, -1)])
-        cbar2 = plt.colorbar(im2, ax=ax2)
-        # cbar2.set_label('Wait Time')
-
-        # 绘制等待时间热度图
-        im3 = ax3.imshow(release_data, cmap='Greens', aspect='equal', interpolation='none', vmin=0, vmax=max(10, np.max(release_data)))
-        ax3.set_title('Traffic Release Heatmap')
-        ax3.set_xlabel('Intersection')
-        ax3.set_ylabel('Street')
-        ax3.set_xticks(np.arange(self.num_col))
-        ax3.set_xticklabels([f'{i+1}' for i in range(self.num_col)])
-        ax3.set_yticks(np.arange(self.num_row))
-        ax3.set_yticklabels([f'{i}' for i in np.arange(self.num_row, 0, -1)])
-        cbar3 = plt.colorbar(im3, ax=ax3)
-        # cbar3.set_label('Release Car Num')
-
-        # 调整布局
-        plt.tight_layout()
-
-        # 显示图形
-        plt.savefig(str(self.results_dir / 'state_img/heatmaps-{}.png').format(self.out_file_name))
-        # 关闭图形窗口
-        plt.close('all')
 
     def process_state(self, state):
         current_states = []

@@ -162,8 +162,9 @@ def build_sampling_config(in_args,cfg):
 
     dic_traffic_env_conf_extra["NUM_AGENTS"] = dic_traffic_env_conf_extra["NUM_INTERSECTIONS"]
     dic_path_extra = {
-        'PATH_TO_MODEL':str(cfg.model_dir/'sampling'),
-        'PATH_TO_WORK_DIRECTORY':str(cfg.out/'records/sampling'),
+        'PATH_TO_MODEL':str(cfg.out/'tmp/sampling/model'),
+        'PATH_TO_WORK_DIRECTORY':str(cfg.out/'tmp/sampling/work'),
+        'PATH_TO_LOG':str(cfg.out/'records/sampling'),
         'PATH_TO_DATA':str(ROOT/'data'/template/road_net),
     }
     env=deepcopy(dic_traffic_env_conf);env.update(dic_traffic_env_conf_extra)
@@ -178,24 +179,26 @@ def run_sampling(cfg,args):
     import random
     import numpy as np
     from framework.FTSample import FTS
-    from utils.training_config import ROOT,atomic_json
+    from utils.training_config import ROOT
+    from utils.experiment import stage_summary,clean_workspace
     if not cfg.run_dir:raise ValueError('Sampling requires a managed output directory')
     output=cfg.path('TRAFFIC_SAMPLE_PATH')
     if output.exists():raise FileExistsError(f'Refusing to overwrite existing samples: {output}')
     random.seed(args.seed);np.random.seed(args.seed);os.chdir(ROOT)
     agent,env,paths,options,roadnet,flow=build_sampling_config(args,cfg)
-    atomic_json(cfg.out/'config/sampling.json',{'agent':agent,'environment':env,'paths':paths,'options':options,'seed':args.seed})
+    stage_summary(cfg,'sample',{'settings':{k:getattr(args,k) for k in SAMPLING_CONFIG_FIELDS},'seed':args.seed})
     sampler=FTS(agent,env,paths,roadnet,flow,options)
     class LocalLogger:
-        def log(self,values):cfg.report('sampling_metrics.json',values)
+        def log(self,values):stage_summary(cfg,'sample',{'seed':args.seed,'settings':{k:getattr(args,k) for k in SAMPLING_CONFIG_FIELDS},'metrics':values})
     result=sampler.test(LocalLogger(),0)
     print('Sampling complete:',output,'records:',len(sampler.FT_data),flush=True)
+    clean_workspace(cfg.out,cfg.out/'tmp/sampling')
     return result
 
 
 def main(in_args):
     from utils.training_config import TrainingConfig,read_json,atomic_json
-    from utils.experiment import create_run,exclusive_stage
+    from utils.experiment import create_run,exclusive_stage,stage_state,training_log
     cfg=TrainingConfig(config_file=in_args.config_file,run_dir=in_args.run_dir)
     args=sampling_arguments(cfg,in_args)
     if cfg.run_dir:
@@ -210,10 +213,16 @@ def main(in_args):
     manifest=read_json(cfg.out/'manifest.json');manifest.update(state='running',training_mode='sampling_only')
     atomic_json(cfg.out/'manifest.json',manifest)
     try:
-        result=exclusive_stage(run_sampling)(cfg,args)
+        import contextlib,sys
+        from utils.baseline_archive import Tee
+        stage_state(cfg.out,'sample','running',attempt=1,log='logs/train.log')
+        with training_log(cfg,'stage=sample attempt=1') as stream,contextlib.redirect_stdout(Tee(sys.stdout,stream)),contextlib.redirect_stderr(Tee(sys.stderr,stream)):
+            result=exclusive_stage(run_sampling)(cfg,args)
+        stage_state(cfg.out,'sample','completed')
         manifest=read_json(cfg.out/'manifest.json');manifest['state']='completed';atomic_json(cfg.out/'manifest.json',manifest)
         return result
     except BaseException:
+        stage_state(cfg.out,'sample','failed')
         manifest=read_json(cfg.out/'manifest.json');manifest['state']='failed';atomic_json(cfg.out/'manifest.json',manifest)
         raise
 

@@ -4,7 +4,6 @@ from utils.utils import *
 from models.CoLLMLightAgent import *
 import os
 import time
-import datetime
 import numpy as np
 from utils.cityflow_env import CityFlowEnv
 import cityflow as engine
@@ -15,17 +14,6 @@ from collections import defaultdict
 
 class FTS:
     def __init__(self, dic_agent_conf, dic_traffic_env_conf, dic_path, roadnet, trafficflow, my_config):
-        if not my_config.get('evaluation_dir'):
-            from utils.training_config import TrainingConfig,atomic_json,read_json
-            from utils.experiment import create_run
-            cfg=TrainingConfig(overrides={'RUN_NAME':my_config.get('memo','sampling'),'ALGORITHM':'CoLLMLight','ENABLE_PPO':False,'DATA_PREPARATION':'sample_and_generate'})
-            folder=create_run(cfg)
-            dic_path=dict(dic_path,PATH_TO_MODEL=str(folder/'models/sampling'),PATH_TO_WORK_DIRECTORY=str(folder/'records/sampling'),EXPERIMENT_DIR=str(folder))
-            my_config=dict(my_config,evaluation_dir=str(folder),sample_output=str(folder/'data/traffic_samples.json'))
-            os.environ['WANDB_DIR']=str(folder/'logs')
-            os.environ.setdefault('WANDB_MODE','offline')
-            manifest=read_json(folder/'manifest.json');manifest.update(training_mode='sampling',state='running')
-            atomic_json(folder/'manifest.json',manifest)
         self.dic_agent_conf = dic_agent_conf
         self.dic_traffic_env_conf = dic_traffic_env_conf
         self.dic_path = dic_path
@@ -37,9 +25,6 @@ class FTS:
         self.num_row = dic_traffic_env_conf['NUM_ROW']
         self.trafficflow = trafficflow
         self.my_config = my_config
-        self.results_dir = Path(my_config.get('evaluation_dir', dic_path['PATH_TO_WORK_DIRECTORY'])) / 'reports' / 'legacy_results'
-        for subdir in ['latest_results','visualization','state_action_log','perf_logs','llm_responses_log','state_img']:
-            (self.results_dir/subdir).mkdir(parents=True,exist_ok=True)
         self.memo = my_config['memo']
         self.reward_type = my_config['reward_type']
         self.boundary_distance_threshold = self.my_config['boundary_distance_threshold']
@@ -73,8 +58,9 @@ class FTS:
         path_check(self.dic_path)
         copy_conf_file(self.dic_path, self.dic_agent_conf, self.dic_traffic_env_conf)
         copy_cityflow_file(self.dic_path, self.dic_traffic_env_conf)
+        os.makedirs(self.dic_path["PATH_TO_LOG"],exist_ok=True)
         self.env = CityFlowEnv(
-            path_to_log=self.dic_path["PATH_TO_WORK_DIRECTORY"],
+            path_to_log=self.dic_path["PATH_TO_LOG"],
             path_to_work_directory=self.dic_path["PATH_TO_WORK_DIRECTORY"],
             dic_traffic_env_conf=self.dic_traffic_env_conf,
             dic_path=self.dic_path
@@ -86,8 +72,6 @@ class FTS:
         # self.llm_init()
         self.agent_init()
         self.release_data = []
-        timestamp = datetime.datetime.now().strftime('%Y%m%d')
-        self.out_file_name = f"{self.memo}-{self.dataset_name}-{timestamp}"
         self.sampled_inter_signal = self.load_inter_signal_from_path()
 
     def load_inter_signal_from_path(self):
@@ -385,7 +369,6 @@ class FTS:
             os.makedirs(os.path.dirname(sample_path), exist_ok=True)
             with open(sample_path, 'w') as f:
                 json.dump(self.FT_data, f, indent=4)
-                # self.sample_ft_data(inter_id, inter_rewards_dict)
 
 
             # self.env.eng.load(self.archive)
@@ -447,8 +430,6 @@ class FTS:
             self.show_boundary_data()
             self.show_car_num()
             last_veh_num = veh_num
-            # self.visualize(next_states)
-            # self.save_performance_data(self.history_data['perf'])
             # if self.memo == 'FT_avgql1_s8k':
             #     self.plot_performance_data()
         # wandb logger
@@ -464,23 +445,11 @@ class FTS:
             "test_avg_waiting_time_over": np.mean(waiting_time_episode) if len(queue_length_episode) > 0 else 0,
             "test_avg_travel_time_over": total_travel_time}
         logger.log(results)
-        os.makedirs(str(self.results_dir / 'latest_results'), exist_ok=True)
-        with open(str(self.results_dir / 'latest_results/{}.txt').format(self.out_file_name), 'w') as f:
-            for key, value in results.items():
-                f.write(f"{key}: {value}\n")
-        print("Test Round:", test_round, results)
-        f_history_data = os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "history_data.json")
-        dump_json(self.history_data, f_history_data)
-        print("Testing time: ", time.time() - start_time)
+        print('Test Round:', test_round, results)
+        print('Testing time:', time.time()-start_time)
 
         self.env.batch_log_2()
 
-        if self.dic_path.get('EXPERIMENT_DIR'):
-            from utils.training_config import atomic_json,read_json
-            root=Path(self.dic_path['EXPERIMENT_DIR'])
-            manifest=read_json(root/'manifest.json');manifest['state']='completed'
-            atomic_json(root/'manifest.json',manifest)
-            atomic_json(root/'reports/sampling_metrics.json',results)
         return results
     
     def calc_throughput(self):
@@ -982,29 +951,6 @@ class FTS:
                     best_signal = signal
         return best_signal
         
-    def sample_ft_data(self, inter_id, inter_rewards_dict):
-        sample = {}
-        sample['inter_id'] = inter_id
-        sample['intersection'] = self.intersection_list[inter_id]
-        sample['state'] = {}
-        sample['state']['local'] = self.agent_intersection_list[inter_id].current_state
-        sample['state']['ud_stream_view'] = self.agent_intersection_list[inter_id].up_down_stream_view
-        sample['metrics'] = inter_rewards_dict
-        sample['best_signal'] = {}
-        ql_best_signal = []
-        wt_best_signal = []
-        att_best_signal = []
-        for i in range(self.reward_period):
-            ql_best_signal.append(self.find_min_signal(inter_rewards_dict, 'ql', i+1))
-            wt_best_signal.append(self.find_min_signal(inter_rewards_dict, 'wt', i+1))
-            att_best_signal.append(self.find_signal_with_min_value_at_i(inter_rewards_dict, i))
-        sample['best_signal']['ql'] = ql_best_signal
-        
-        sample['best_signal']['wt'] = wt_best_signal
-        sample['best_signal']['att'] = att_best_signal
-        self.FT_data.append(sample)
-        with open(self.my_config.get('sample_output', str(Path(self.dic_path['PATH_TO_WORK_DIRECTORY'])/'SynTrain_sample.json')), 'w') as f:
-            json.dump(self.FT_data, f, indent=4)
 
     def get_up_down_stream_relation(self, inter_id):
         upstream_relation = {'NT': ['North', ['NT', 'EL', 'WR']], 'NL': ['North', ['NT', 'EL', 'WR']], 'ET': ['East', ['ET', 'SL', 'NR']], 'EL': ['East', ['ET', 'SL', 'NR']], 'ST': ['South', ['ST', 'WL', 'ER']], 'SL': ['South', ['ST', 'WL', 'ER']], 'WT': ['West', ['WT', 'NL', 'SR']], 'WL': ['West', ['WT', 'NL', 'SR']]}
@@ -1194,66 +1140,8 @@ class FTS:
 
         return congest_lane_list, congest_degree_list, queue_num_list, avg_wait_time_list
     
-    def save_performance_data(self, data):
-        # Load existing data
-        filename = f'{self.out_file_name}.json'
-        filepath = str(self.results_dir / 'perf_logs/')+ filename
-        perf_data = {}    
-        perf_data[self.memo] = data
-        # Add or update method data
-        # Save updated data
-        with open(filepath, 'w') as f:
-            json.dump(perf_data, f, indent=4)
     
-    def save_llm_response_data(self, data):
-        # Load existing data
-        filename = str(self.results_dir / f'llm_responses_log/{self.out_file_name}.json')
-        llm_data = {}    
-        llm_data[self.memo] = data
-        with open(filename, 'w') as f:
-            json.dump(llm_data, f, indent=4)
 
-    def plot_performance_data(self):
-        import matplotlib.pyplot as plt
-        # Load data
-        matching_files = []
-        for root, dirs, files in os.walk(str(self.results_dir / 'perf_logs/')):
-            for file in files:
-                if file.endswith('.json'):
-                    parts = file.split('-')
-                    if len(parts) == 3:
-                        file_dataset = parts[1]
-                        if file_dataset == self.dataset_name:
-                            file_path = os.path.join(root, file)
-                            matching_files.append(file_path)
-        perf_data = {}
-        for file_path in matching_files:
-            try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-            except FileNotFoundError:
-                data = {}
-            perf_data.update(data)
-
-        # Define colors
-        colors = plt.cm.get_cmap('tab10', len(perf_data))
-
-        # Create subplots for AWT, AQL, ATT
-        fig, axes = plt.subplots(3, 1, figsize=(20, 15))
-        metrics = ['AWT', 'AQL', 'ATT']
-        
-        for i, metric in enumerate(metrics):
-            ax = axes[i]
-            for j, (method_name, method_data) in enumerate(perf_data.items()):
-                ax.plot(method_data[metric], label=method_name, color=colors(j))
-            ax.set_title(metric)
-            ax.legend()
-            ax.set_xlabel('Index')
-            ax.set_ylabel(metric)
-        
-        plt.tight_layout()
-        plt.savefig(str(self.results_dir / 'state_img/{}_performance_plots.png').format(self.memo))
-        plt.show()
 
     def calc_avg_travel_time(self):
         current_time = self.env.get_current_time()
@@ -1298,83 +1186,6 @@ class FTS:
     def show_car_num(self):
         print("car_num inside: {}, ql_num inside: {}".format(len(self.history_data['veh_log']['inside_list']), self.history_data['car_num_inside']['waiting'][-1]))
     
-    def visualize(self, states):
-        import matplotlib.pyplot as plt
-        """
-        更新交通情况热度图。
-        
-        参数：
-        ql_num (ndarray): 28x7的汽车队列长度数据。
-        wait_time (ndarray): 28x7的等待时间数据。
-        """
-        # 清除当前图形
-        ql_num = []
-        wait_time = []
-        release_data = self.release_data
-        for state in states:
-            ql = 0
-            wt = 0
-            for lane in location_all_direction_dict:
-                ql += state[lane]['queue_len']
-                veh_list = list(state[lane]['veh2cell'].keys())
-                # wt += state[lane]['queue_len'] * state[lane]['avg_wait_time']
-                wt += sum([state[lane]['wait_time'][veh] for veh in veh_list])
-            ql_num.append(ql)
-            wait_time.append(wt)
-        ql_num = np.array(ql_num)
-        wait_time = np.array(wait_time)
-        release_data = np.array(release_data)
-        ql_num = np.rot90(ql_num.reshape(self.num_col, self.num_row))
-        wait_time = np.rot90(wait_time.reshape(self.num_col, self.num_row))
-        release_data = np.rot90(release_data.reshape(self.num_col, self.num_row))
-        plt.clf()
-        
-        # 创建一个包含两个子图的图形
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 20))
-
-        # 绘制汽车队列长度热度图
-        im1 = ax1.imshow(ql_num, cmap='Reds', aspect='equal', interpolation='none', vmin=0, vmax=max(100, np.max(ql_num)))
-        ax1.set_title('Traffic Queue Length Heatmap')
-        ax1.set_xlabel('Intersection')
-        ax1.set_ylabel('Street')
-        ax1.set_xticks(np.arange(self.num_col))
-        ax1.set_xticklabels([f'{i+1}' for i in range(self.num_col)])
-        ax1.set_yticks(np.arange(self.num_row))
-        ax1.set_yticklabels([f'{i}' for i in np.arange(self.num_row, 0, -1)])
-        cbar1 = plt.colorbar(im1, ax=ax1)
-        # cbar1.set_label('Queue Length')
-
-        # 绘制等待时间热度图
-        im2 = ax2.imshow(wait_time, cmap='Blues', aspect='equal', interpolation='none', vmin=0, vmax=max(20000, np.max(wait_time)))
-        ax2.set_title('Traffic Wait Time Heatmap')
-        ax2.set_xlabel('Intersection')
-        ax2.set_ylabel('Street')
-        ax2.set_xticks(np.arange(self.num_col))
-        ax2.set_xticklabels([f'{i+1}' for i in range(self.num_col)])
-        ax2.set_yticks(np.arange(self.num_row))
-        ax2.set_yticklabels([f'{i}' for i in np.arange(self.num_row, 0, -1)])
-        cbar2 = plt.colorbar(im2, ax=ax2)
-        # cbar2.set_label('Wait Time')
-
-        # 绘制等待时间热度图
-        im3 = ax3.imshow(release_data, cmap='Greens', aspect='equal', interpolation='none', vmin=0, vmax=max(10, np.max(release_data)))
-        ax3.set_title('Traffic Release Heatmap')
-        ax3.set_xlabel('Intersection')
-        ax3.set_ylabel('Street')
-        ax3.set_xticks(np.arange(self.num_col))
-        ax3.set_xticklabels([f'{i+1}' for i in range(self.num_col)])
-        ax3.set_yticks(np.arange(self.num_row))
-        ax3.set_yticklabels([f'{i}' for i in np.arange(self.num_row, 0, -1)])
-        cbar3 = plt.colorbar(im3, ax=ax3)
-        # cbar3.set_label('Release Car Num')
-
-        # 调整布局
-        plt.tight_layout()
-
-        # 显示图形
-        plt.savefig(str(self.results_dir / 'state_img/heatmaps-{}.png').format(self.out_file_name))
-        # 关闭图形窗口
-        plt.close('all')
 
     def process_state(self, state):
         current_states = []
