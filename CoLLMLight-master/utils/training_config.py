@@ -49,13 +49,17 @@ DEFAULTS.update(PPO_LORA_TARGET='auto', EXPORT_SOURCE='auto', EXPORT_OUTPUT_DIR=
 DEFAULTS.update(ENABLE_PPO=True, DATA_PREPARATION='reuse', SFT_SOURCE_RUN='', ALGORITHM=COLLMLIGHT_ALGORITHM,
     PPO_WHITEN_REWARDS=True, PPO_MAX_SAMPLES=0, PPO_EVAL_RATIO=0.1, PPO_TOP_K=50, PPO_TOP_P=0.95,
     VLLM_GPU_MEMORY=0.25, SFT_SAVE_STEPS=1, SFT_SAVE_STRATEGY='epoch', SFT_BEST_METRIC='eval_loss',
-    SFT_GREATER_IS_BETTER=False, SFT_EVAL_STRATEGY='epoch', CITYFLOW_PORT=23333,
+    SFT_GREATER_IS_BETTER=False, SFT_EVAL_STRATEGY='epoch', SFT_SAVE_TOTAL_LIMIT=2, CITYFLOW_PORT=23333,
     CITYFLOW_DISABLE_SR=False, CITYFLOW_SYNCHRONOUS_SR=False)
+# Sampling defaults come from the preserved official CLI, not another copy.
+from run_fts import parse_args as _sampling_args, SAMPLING_CONFIG_FIELDS
+_sampling_defaults=_sampling_args([])
+DEFAULTS.update({key:getattr(_sampling_defaults,argument) for argument,key in SAMPLING_CONFIG_FIELDS.items()})
 YAML_FIELDS = {
     'output_root': 'OUTPUT_ROOT',
     'training': {'random_seed':'RANDOM_SEED','enable_ppo':'ENABLE_PPO','data_preparation':'DATA_PREPARATION','sft_source_run':'SFT_SOURCE_RUN'},
     'inputs': {'traffic_samples':'TRAFFIC_INPUT_PATH','teacher_data':'TEACHER_INPUT_PATH'},
-    'sampling': {'max_steps':'SAMPLING_MAX_STEPS'},
+    'sampling': {('max_steps' if argument=='max_sampling_steps' else argument):key for argument,key in SAMPLING_CONFIG_FIELDS.items()},
     'teacher_data': {'max_samples':'TEACHER_MAX_SAMPLES','random_seed':'TEACHER_RANDOM_SEED'},
     'data': {'ppo_eval_ratio':'PPO_EVAL_RATIO','eval_ratio':'DATA_EVAL_RATIO', 'sft_require_ra_match':'SFT_REQUIRE_RA_MATCH'},
     'export': {'source':'EXPORT_SOURCE','output_dir':'EXPORT_OUTPUT_DIR','device':'EXPORT_DEVICE',
@@ -78,7 +82,7 @@ for _stage in ('sft', 'ppo'):
              'optimization_epochs':'OPTIMIZATION_EPOCHS','max_updates':'MAX_UPDATES',
              'max_new_tokens':'MAX_NEW_TOKENS','temperature':'TEMPERATURE'}.items()})}
 YAML_FIELDS['ppo'].update(whiten_rewards='PPO_WHITEN_REWARDS',max_samples='PPO_MAX_SAMPLES',top_k='PPO_TOP_K',top_p='PPO_TOP_P',gpu_memory_utilization='VLLM_GPU_MEMORY')
-YAML_FIELDS['sft'].update(save_steps='SFT_SAVE_STEPS',save_strategy='SFT_SAVE_STRATEGY',eval_strategy='SFT_EVAL_STRATEGY',best_metric='SFT_BEST_METRIC',greater_is_better='SFT_GREATER_IS_BETTER')
+YAML_FIELDS['sft'].update(save_steps='SFT_SAVE_STEPS',save_total_limit='SFT_SAVE_TOTAL_LIMIT',save_strategy='SFT_SAVE_STRATEGY',eval_strategy='SFT_EVAL_STRATEGY',best_metric='SFT_BEST_METRIC',greater_is_better='SFT_GREATER_IS_BETTER')
 MODEL_KEYS = {k for k in DEFAULTS if k.startswith(('TEACHER_', 'STUDENT_'))} - {
     'TEACHER_MAX_SAMPLES', 'TEACHER_RANDOM_SEED', 'TEACHER_OUTPUT_PATH', 'TEACHER_INPUT_PATH'}
 
@@ -206,6 +210,12 @@ class TrainingConfig:
             if self[key] <= 0:
                 raise ValueError(f'{key} must be positive')
         if self['SAMPLING_MAX_STEPS']<0:raise ValueError('sampling.max_steps must be nonnegative; 0 means the complete simulation')
+        if self['SFT_SAVE_TOTAL_LIMIT']<1:raise ValueError('sft.save_total_limit must be positive')
+        if self['SFT_SAVE_STEPS']<1:raise ValueError('sft.save_steps must be positive')
+        if self['SFT_SAVE_STRATEGY'] != self['SFT_EVAL_STRATEGY'] or self['SFT_SAVE_STRATEGY'] not in ('epoch','steps'):
+            raise ValueError('SFT save/eval strategies must match (epoch or steps)')
+        if self['SFT_BEST_METRIC']!='eval_loss' or self['SFT_GREATER_IS_BETTER']:
+            raise ValueError('SFT selection requires minimum eval_loss')
         for key in ('SFT_LORA_DROPOUT', 'PPO_LORA_DROPOUT'):
             if not 0 <= self[key] < 1:
                 raise ValueError(f'{key} must be in [0, 1)')

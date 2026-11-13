@@ -66,18 +66,3 @@ class TransformersModel:
 
     def ask(self,prompt,system_prompt='You are a helpful AI assistant.',**kwargs):
         return self.batch_ask([prompt],system_prompt,**kwargs)[0]
-
-
-def evaluate_policy(client, records):
-    from .prompts import SYSTEM_PROMPT,get_atr_user_prompt,get_ra_user_prompt
-    from training.collmlight.ppo_ft import calculate_reactive_action_reward,calculate_advance_reasoning_reward
-    values=[]
-    for record in records:
-        atr=client.ask(get_atr_user_prompt(record),SYSTEM_PROMPT)
-        ra=client.ask(get_ra_user_prompt(record,atr),SYSTEM_PROMPT)
-        score,used=calculate_reactive_action_reward(ra,record['Best_Signal'])
-        values.append({'sample_id':record['sample_id'],'atr':atr,'ra':ra,'ra_reward':score,
-                       'atr_reward':calculate_advance_reasoning_reward(atr,score,used)})
-    if not values:raise ValueError('No validation records for full model export')
-    return {'ra_reward':sum(v['ra_reward'] for v in values)/len(values),
-            'atr_reward':sum(v['atr_reward'] for v in values)/len(values),'examples':values}

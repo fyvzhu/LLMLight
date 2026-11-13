@@ -80,7 +80,7 @@ Set the complete model path in `config/config.yaml`, or select a training run:
 .venv/bin/python run_CoLLMlight.py --run-dir outputs/CoLLMLight/CoLLMLight_<timestamp>
 ```
 
-The configured `transformers` backend can also load a local complete model directly, without a separate inference server.
+CityFlow uses the published OpenAI-compatible service adapter (`cityflow_test.backend: llama`, including when serving Qwen). Start the service with the same complete model selected for the simulation. Local Transformers loading is used only for export integrity checks; it is not a second CityFlow evaluation backend.
 
 <a id="training-workflow"></a>
 ## 5. Training Workflow
@@ -94,6 +94,8 @@ Use the existing project environment and the single main configuration `config/c
 `training.data_preparation` selects simulation sampling plus teacher generation, generation from an existing traffic sample file, or existing teacher data. `training.enable_ppo` selects SFT-only or SFT followed by PPO. Teacher generation uses the published ATR/RA functions and six-field data format. The added SFT stage connects to the published PPO implementation with the required batch, adapter-loading and validation fixes.
 
 Each run stores its model, logs and metrics under `outputs/CoLLMLight/CoLLMLight_<timestamp>/`. The final `models/trained_best_model/` is a complete independently loadable model. See [TRAINING.md](TRAINING.md) for input activation rules and commands. Teacher/student credentials remain in `.env`.
+
+SFT uses native Trainer checkpoint saving, best-model selection and state restoration. Set `sft.save_total_limit` in the main YAML (default: 2); continue an interrupted run with `train_collmlight.py --resume-run <run_directory>`. Complete training checkpoints live in `models/sft_checkpoints/checkpoint-N/`; `models/sft_best/` remains a lightweight best Adapter for PPO or export. Adapter-only historical outputs do not support full-state resumption.
 
 <a id="api-configuration"></a>
 ## 6. API Configuration

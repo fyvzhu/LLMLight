@@ -118,7 +118,7 @@ class VLLMLocalGenerator:
 
         self.last_batch=[{'query_ids':list(out.prompt_token_ids),'response_ids':list(out.outputs[0].token_ids)} for out in outputs]
         if self.cfg:
-            metrics(self.cfg,'ppo_inference',{'module':getattr(self,'module','unknown'),'split':getattr(self,'split','unknown'),'batch_size':len(prompts),'batch_wall_time_s':time.perf_counter()-started,'completion_tokens':[len(r['response_ids']) for r in self.last_batch]})
+            metrics(self.cfg,getattr(self,'metrics_name','ppo_inference'),{'purpose':getattr(self,'purpose','training_rollout'),'module':getattr(self,'module','unknown'),'split':getattr(self,'split','unknown'),'batch_size':len(prompts),'batch_wall_time_s':time.perf_counter()-started,'completion_tokens':[len(r['response_ids']) for r in self.last_batch]})
         responses = [output.outputs[0].text for output in outputs]
         return responses
 
@@ -293,14 +293,14 @@ def evaluate_model(vllm_generator, eval_dataset):
 
 def calculate_reactive_action_reward(reactive_action_response: str, best_signal: str) -> tuple[float, int]:
     """Calculate the reward for the reactive action."""
-    from utils.my_utils import extract_json_reactive_action_results
+    from utils.training_rewards import parse_action
     try:
-        ra_results_json = extract_json_reactive_action_results(reactive_action_response)
+        ra_results_json = parse_action(reactive_action_response)
         signal = ra_results_json['signal']
         used_atr = ra_results_json.get('used_atr', 0)
 
         reward = 1.0 if signal == best_signal else -1.0
-    except Exception:
+    except ValueError:
         reward = -1.0
         used_atr = 0
 
@@ -453,10 +453,38 @@ def run(cfg):
         'best':read_json(cfg.artifact('ppo_best')/'best_model.json'),'counts':counts,'save_strategy':'epoch'})
 
 
+def evaluate_full_model(cfg,model_path,output_path):
+    """Integrity inference through the same published PPO evaluation protocol."""
+    from utils.training_rewards import parse_action
+    if cfg['ENABLE_PPO']:
+        records=split_records(cfg)[1]
+    else:
+        ids=read_json(cfg.data_dir/'sft_data/split_manifest.json')['eval']
+        records=[dict(row['data'],sample_id=digest(row['data'])) for row in read_json(cfg.path('TEACHER_OUTPUT_PATH')) if digest(row['data']) in ids]
+    if not records:raise ValueError('Export integrity inference requires a validation record')
+    # One held-out record is sufficient for integrity; full selection already ran.
+    records=records[:1]
+    generator=VLLMLocalGenerator(str(model_path),max_model_len=cfg['STUDENT_MAX_LENGTH'],cfg=cfg)
+    generator.metrics_name='export_inference';generator.purpose='model_integrity_only';generator.split='integrity'
+    try:
+        evaluate_model(generator,records)
+        for row in generator.evaluation['examples']:
+            if not row['atr'].strip():raise RuntimeError('Empty SR during export integrity inference')
+            parse_action(row['ra'])
+        result=dict(generator.evaluation,purpose='model_integrity_only',used_for_best_selection=False,
+            protocol='published PPO evaluate_model + *_user_prompt_wsys',backend='vllm',
+            batch_size=len(records),temperature=cfg['PPO_TEMPERATURE'],top_k=cfg['PPO_TOP_K'],top_p=cfg['PPO_TOP_P'],
+            max_new_tokens=cfg['PPO_MAX_NEW_TOKENS'],seed=cfg['RANDOM_SEED'])
+        atomic_json(output_path,result)
+    finally:generator.unload_model()
+
+
 if __name__=='__main__':
     parser=config_args(__doc__)
     parser.add_argument('--rollout-request')
     parser.add_argument('--output')
+    parser.add_argument('--evaluate-model')
     args=parser.parse_args()
     if args.rollout_request:generate_rollout(args.rollout_request,args.output)
+    elif args.evaluate_model:evaluate_full_model(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir),args.evaluate_model,args.output)
     else:run(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir))

@@ -121,10 +121,7 @@ class CoLLMLight:
             "max_tokens": self.my_config['max_tokens'],"seed":self.my_config.get('seed',42)}
         model = self.my_config['llm_path']
         model_type = self.my_config['llm_type']
-        if model_type == 'transformers':
-            from utils.inference_models import TransformersModel
-            self.LLM = TransformersModel(model, self.my_config['max_tokens'], self.my_config.get('dtype', 'auto'),do_sample=True)
-        elif model_type == 'gpt':
+        if model_type == 'gpt':
             self.LLM = GPT_model(model=model)
         elif model_type == 'llama':
             self.LLM = LLAMA_model(llm_params = llm_params, model=model, port=self.my_config['port'])
@@ -508,7 +505,7 @@ class CoLLMLight:
             messages = [{"role": "user", "content": decision_making_2st_prompts_list[i]},
                         {"role": "assistant", "content": reactive_action_output_list[i]}]
             reactive_action_messages_list.append(messages)
-            results = self.extract_json_reactive_action_results(reactive_action_output_list[i])
+            results = extract_json_reactive_action_results(reactive_action_output_list[i])
             if results['signal'] in self.signal_list:
                 action_list[inter_id] = self.signal_list.index(results['signal'])
             atr_score_list.append(results['used_atr'])
@@ -525,51 +522,6 @@ class CoLLMLight:
             return text.split(tag, 1)[1].strip()
         return text
     
-    def extract_json_reactive_action_results(self, response):
-        """
-        从LLM的响应中提取JSON格式的信号选择结果。
-        此版本经过优化，可以处理可选的markdown代码块，并且对JSON键名大小写不敏感。
-        
-        返回:
-            一个包含 'signal', 'reason', 和 'used_atr' 字段的字典。
-        """
-        try:
-            json_data = None
-            # 1. 优先尝试从 ```json ... ``` 代码块中提取JSON
-            match = re.search(r"```json\s*({.*?})\s*```", response, re.DOTALL)
-            if match:
-                json_data = match.group(1)
-            else:
-                # 2. 如果没有找到代码块，则在整个字符串中查找第一个有效的JSON对象
-                match = re.search(r"({.*})", response.strip(), re.DOTALL)
-                if match:
-                    json_data = match.group(1)
-
-            if json_data:
-                # 解析提取到的JSON字符串
-                data = json.loads(json_data)
-                
-                # *** 新增：将所有键转换为小写，以实现大小写不敏感 ***
-                data_lower = {k.lower(): v for k, v in data.items()}
-                
-                # 使用处理过的字典安全地获取值
-                result = {
-                    'signal': data_lower.get('signal'),
-                    'reason': data_lower.get('reason'),
-                    'used_atr': data_lower.get('used_atr', 0)
-                }
-                return result
-            
-            else:
-                # 如果在响应中找不到任何JSON数据
-                return {'signal': None, 'reason': None, 'used_atr': 0}
-                
-        except json.JSONDecodeError:
-            # 如果JSON格式错误
-            return {'signal': None, 'reason': None, 'used_atr': 0}
-        except Exception:
-            # 捕获其他未知异常
-            return {'signal': None, 'reason': None, 'used_atr': 0}
 
     
     def plot_coordination_distribution(self, no_coordination_history, simple_coordination_history, complex_coordination_history, avg_infer_speed, total_step_num):  

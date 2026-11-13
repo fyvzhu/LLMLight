@@ -26,11 +26,6 @@ def preflight(cfg):
         raise ValueError('export.source conflicts with enable_ppo')
     if cfg['EXPORT_OUTPUT_DIR']:
         raise ValueError('The total entry exports within its unique run directory; leave output_dir null')
-    if cfg['SFT_BEST_METRIC'] != 'eval_loss' or cfg['SFT_GREATER_IS_BETTER']:
-        raise ValueError('SFT selection requires minimum eval_loss')
-    if cfg['SFT_SAVE_STEPS']<1:raise ValueError('sft.save_steps must be positive')
-    if cfg['SFT_SAVE_STRATEGY'] != cfg['SFT_EVAL_STRATEGY'] or cfg['SFT_SAVE_STRATEGY'] not in ('epoch','steps'):
-        raise ValueError('SFT save/eval strategies must match (epoch or steps)')
     if not cfg.path('STUDENT_MODEL_PATH').joinpath('config.json').is_file():raise FileNotFoundError('Student model missing')
     mode=cfg['DATA_PREPARATION']
     needs_traffic=mode=='generate_teacher' or (cfg['ENABLE_PPO'] and mode!='sample_and_generate')

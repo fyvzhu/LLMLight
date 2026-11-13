@@ -1,12 +1,8 @@
-import os
-import time
-import argparse
-from utils import error
-from framework.FTSample import *
-from utils.config import *
-from utils.utils import merge
+"""Official FTS entry and the single sampling configuration builder."""
+import os,sys,argparse
+from copy import deepcopy
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser()
     # parser.add_argument("--memo", type=str, default='MALLMlight-GPT3.5')
     # parser.add_argument("--model_type", type=str, default="gpt") #/gpt/llama
@@ -31,12 +27,31 @@ def parse_args():
     parser.add_argument("--debug_wollm", type=bool, default=False)
     parser.add_argument("--reward_period", type=int, default=5)
     parser.add_argument("--ignore_threshold", type=float, default=0)
-    return parser.parse_args()
+    parser.add_argument('--max_sampling_steps',type=int,default=0)
+    parser.add_argument('--seed',type=int,default=42)
+    parser.add_argument('--config',dest='config_file',default=None)
+    parser.add_argument('--run-dir',default=None)
+    arguments=sys.argv[1:] if argv is None else list(argv)
+    result=parser.parse_args(arguments)
+    result._explicit={parser._option_string_actions[token.split('=',1)[0]].dest for token in arguments if token.split('=',1)[0] in parser._option_string_actions}
+    return result
+
+SAMPLING_CONFIG_FIELDS = {'max_sampling_steps': 'SAMPLING_MAX_STEPS', 'dataset': 'SAMPLING_DATASET', 'traffic_file': 'SAMPLING_TRAFFIC_FILE', 'reward_type': 'SAMPLING_REWARD_TYPE', 'reward_period': 'SAMPLING_REWARD_PERIOD', 'ignore_threshold': 'SAMPLING_IGNORE_THRESHOLD', 'long_info': 'SAMPLING_LONG_INFO', 'feed_back': 'SAMPLING_FEED_BACK', 'feed_back_num': 'SAMPLING_FEED_BACK_NUM', 'debug_wollm': 'SAMPLING_DEBUG'}
 
 
-def main(in_args):
+def sampling_arguments(cfg,overrides=None):
+    args=parse_args([])
+    for argument,key in SAMPLING_CONFIG_FIELDS.items():setattr(args,argument,cfg[key])
+    args.seed=cfg['RANDOM_SEED'];args.memo=cfg['RUN_NAME']
+    if overrides is not None:
+        for name in overrides._explicit-{'config_file','run_dir'}:setattr(args,name,getattr(overrides,name))
+    return args
+
+
+def build_sampling_config(in_args,cfg):
+    from utils.env_defaults import dic_traffic_env_conf
+    from utils.training_config import ROOT
     traffic_file_list = [] 
-    print(in_args.model_path)
 
     if in_args.dataset == 'jinan':
         count = 3600
@@ -71,13 +86,8 @@ def main(in_args):
 
     in_args.model = in_args.memo
 
-    # flow_file error
-    try:
-        if in_args.traffic_file not in traffic_file_list:
-            raise error.flowFileException('Flow file does not exist.')
-    except error.flowFileException as e:
-        print(e)
-        return
+    if in_args.traffic_file not in traffic_file_list:
+        raise ValueError('Traffic file is not valid for the selected dataset')
     NUM_ROW = int(road_net.split('_')[0])
     NUM_COL = int(road_net.split('_')[1])
     num_intersections = NUM_ROW * NUM_COL
@@ -152,19 +162,60 @@ def main(in_args):
 
     dic_traffic_env_conf_extra["NUM_AGENTS"] = dic_traffic_env_conf_extra["NUM_INTERSECTIONS"]
     dic_path_extra = {
-        "PATH_TO_MODEL": os.path.join("model", in_args.memo, in_args.traffic_file + "_" +
-                                      time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time()))),
-        "PATH_TO_WORK_DIRECTORY": os.path.join("records", in_args.memo, in_args.traffic_file + "_" +
-                                               time.strftime('%m_%d_%H_%M_%S', time.localtime(time.time()))),
-        "PATH_TO_DATA": os.path.join("data", template, str(road_net))
+        'PATH_TO_MODEL':str(cfg.model_dir/'sampling'),
+        'PATH_TO_WORK_DIRECTORY':str(cfg.out/'records/sampling'),
+        'PATH_TO_DATA':str(ROOT/'data'/template/road_net),
     }
-    if in_args.mode == "fts":
-        trainer = FTS(dic_agent_conf_extra,
-                                merge(dic_traffic_env_conf, dic_traffic_env_conf_extra),
-                                dic_path_extra,
-                                f'{template}-{road_net}', in_args.traffic_file.split(".")[0], my_config)
-    trainer.train_test()
+    env=deepcopy(dic_traffic_env_conf);env.update(dic_traffic_env_conf_extra)
+    env['MODEL_NAME']='FTS'
+    if in_args.max_sampling_steps<0:raise ValueError('max_sampling_steps must be nonnegative')
+    my_config.update(max_sampling_steps=in_args.max_sampling_steps or count//env['MIN_ACTION_TIME'],
+        sample_output=str(cfg.path('TRAFFIC_SAMPLE_PATH')),evaluation_dir=str(cfg.out))
+    return dic_agent_conf_extra,env,dic_path_extra,my_config,f'{template}-{road_net}',in_args.traffic_file.split('.')[0]
 
-if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+
+def run_sampling(cfg,args):
+    import random
+    import numpy as np
+    from framework.FTSample import FTS
+    from utils.training_config import ROOT,atomic_json
+    if not cfg.run_dir:raise ValueError('Sampling requires a managed output directory')
+    output=cfg.path('TRAFFIC_SAMPLE_PATH')
+    if output.exists():raise FileExistsError(f'Refusing to overwrite existing samples: {output}')
+    random.seed(args.seed);np.random.seed(args.seed);os.chdir(ROOT)
+    agent,env,paths,options,roadnet,flow=build_sampling_config(args,cfg)
+    atomic_json(cfg.out/'config/sampling.json',{'agent':agent,'environment':env,'paths':paths,'options':options,'seed':args.seed})
+    sampler=FTS(agent,env,paths,roadnet,flow,options)
+    class LocalLogger:
+        def log(self,values):cfg.report('sampling_metrics.json',values)
+    result=sampler.test(LocalLogger(),0)
+    print('Sampling complete:',output,'records:',len(sampler.FT_data),flush=True)
+    return result
+
+
+def main(in_args):
+    from utils.training_config import TrainingConfig,read_json,atomic_json
+    from utils.experiment import create_run,exclusive_stage
+    cfg=TrainingConfig(config_file=in_args.config_file,run_dir=in_args.run_dir)
+    args=sampling_arguments(cfg,in_args)
+    if cfg.run_dir:
+        # A managed run's frozen sampling settings cannot be silently replaced.
+        if any(getattr(args,k)!=cfg[v] for k,v in SAMPLING_CONFIG_FIELDS.items()) or args.seed!=cfg['RANDOM_SEED']:
+            raise ValueError('Sampling overrides differ from the managed run configuration')
+    else:
+        for argument,key in SAMPLING_CONFIG_FIELDS.items():cfg.values[key]=getattr(args,argument)
+        cfg.values.update(RANDOM_SEED=args.seed,ENABLE_PPO=False,DATA_PREPARATION='sample_and_generate')
+        folder=create_run(cfg);cfg=TrainingConfig(config_file=cfg.config_file,run_dir=folder)
+    print('Sampling run:',cfg.out,flush=True)
+    manifest=read_json(cfg.out/'manifest.json');manifest.update(state='running',training_mode='sampling_only')
+    atomic_json(cfg.out/'manifest.json',manifest)
+    try:
+        result=exclusive_stage(run_sampling)(cfg,args)
+        manifest=read_json(cfg.out/'manifest.json');manifest['state']='completed';atomic_json(cfg.out/'manifest.json',manifest)
+        return result
+    except BaseException:
+        manifest=read_json(cfg.out/'manifest.json');manifest['state']='failed';atomic_json(cfg.out/'manifest.json',manifest)
+        raise
+
+
+if __name__=='__main__':main(parse_args())

@@ -20,8 +20,8 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
     if cfg.run_dir and explicit is not None and Path(explicit).resolve()!=cfg.export_dir.resolve():
         raise ValueError('run-dir and explicit model identify different experiments; select just the explicit model for a new evaluation')
     model_path=require_full_model(model_path or cfg.cityflow_model)
-    if cfg['CITYFLOW_BACKEND'] not in ('transformers','llama'):
-        raise ValueError('Choose transformers or the original compatible llama service backend')
+    if cfg['CITYFLOW_BACKEND'] != 'llama':
+        raise ValueError('Formal CityFlow evaluation requires the published llama API backend')
     options={'synthetic_4x4':('Synthetic','4_4'),'jinan':('Jinan','3_4'),
              'hangzhou':('Hangzhou','4_4'),'newyork_28x7':('NewYork','28_7'),
              'newyork_16x3':('NewYork','16_3')}
@@ -105,7 +105,7 @@ if __name__=='__main__':
     parser=config_args(__doc__)
     parser.add_argument('--model_path','--model-path',dest='model_path',default=None)
     parser.add_argument('--run-counts',type=int,default=None)
-    parser.add_argument('--backend','--model_type',dest='backend',choices=['transformers','llama'])
+    parser.add_argument('--backend','--model_type',dest='backend',choices=['llama'])
     parser.add_argument('--port',type=int)
     parser.add_argument('--new_max_tokens','--max-new-tokens',dest='max_tokens',type=int)
     parser.add_argument('--disable_psr',action='store_true')

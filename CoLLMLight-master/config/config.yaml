@@ -12,6 +12,10 @@ inputs:
   teacher_data: null    # reuse 必填；其余模式忽略
 
 sampling:
+  dataset: synthetic_4x4
+  traffic_file: anon_4_4_synthetic_8000.json
+  reward_type: avg_ql
+  reward_period: 5
   max_steps: 3          # 0=完整仿真；正整数=采样决策步数
 
 teacher_data:
@@ -40,6 +44,7 @@ sft:
   save_strategy: steps
   eval_strategy: steps
   save_steps: 1
+  save_total_limit: 2   # 标准完整 checkpoint 的保留总数，由 Trainer 管理最佳和最新候选
   best_metric: eval_loss
   greater_is_better: false
 
@@ -76,7 +81,7 @@ export:
 
 cityflow_test:
   model_path: null      # 可设置完整模型目录，或启动时指定 --run-dir
-  backend: transformers
+  backend: llama
   port: 23333
   dataset: synthetic_4x4
   traffic_file: anon_4_4_synthetic_8000.json
