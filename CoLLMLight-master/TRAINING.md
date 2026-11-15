@@ -149,7 +149,7 @@ SFT转换、PPO奖励和CityFlow共用`utils/training_rewards.py`的RA解析规�
 
 ## 日志与测试
 
-SFT/PPO训练、验证、选优数据保存在metrics；各阶段摘要在manifest中，终端输出统一追加到train.log，并标记stage、attempt及vLLM epoch。教师用量在teacher_requests；密钥不写入日志。完整模型来源与验收只在model_manifest.json保存，运行manifest仅引用其位置。
+SFT/PPO训练、验证、选优数据保存在metrics；各阶段摘要在manifest中，终端输出统一追加到train.log，并标记stage、attempt及vLLM epoch。 统一训练入口同时实时转发子进程输出到终端，包含嵌套的vLLM生成和导出验收，不在每层重复写日志。采样显示仿真步、路口、候选信号、已采样数和ATT/AWT/AQL；教师显示ATR/RA任务、完成数、请求耗时、重试次数及累计token；SFT沿用Trainer原生进度和指标；PPO显示epoch、更新进度、reward、policy/value loss及KL。逐秒time/Step time明细仅留在train.log，避免淹没终端。子进程连续30秒没有输出时显示存活提示和已用时间，不伪造完成百分比；Ctrl+C会停止本次启动的子进程组并记录阶段中断状态。教师用量在teacher_requests；密钥不写入日志。完整模型来源与验收只在model_manifest.json保存，运行manifest仅引用其位置。
 
 后续分析项目可使用评测summary中的ATT/AWT/AQL比较算法，使用traffic逐步指标绘制交通曲线，使用SR/RD整批耗时和实际batch_size分析延迟，使用逐次token及车辆数分析推理长度与交通复杂度；模型、路网、种子、生成配置用于区分实验条件。必须剔除或单独统计finish_reason=length的截断样本，不能把PPO的标题计数奖励当作token长度。多种子汇总、显著性检验和画图在后处理项目完成，这里不重复输出派生表格。当前服务适配器记录输出logprobs的token计数，尚未保存完整输入token用量，不能据此覆盖全部部署成本分析。
 

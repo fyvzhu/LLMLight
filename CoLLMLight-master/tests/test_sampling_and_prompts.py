@@ -22,7 +22,7 @@ def load_sampling_test():
         "time": time,
         "deepcopy": deepcopy,
         "defaultdict": defaultdict,
-        "tqdm": lambda values: values,
+        "tqdm": lambda values, **kwargs: values,
         "action2code": lambda signal: signal,
     }
     exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), "exec"), namespace)

@@ -16,10 +16,10 @@ sampling:
   traffic_file: anon_4_4_synthetic_8000.json
   reward_type: avg_ql
   reward_period: 5
-  max_steps: 3          # 0=完整仿真；正整数=采样决策步数
+  max_steps: 0          # 0=完整仿真；正整数=采样决策步数
 
 teacher_data:
-  max_samples: 2        # 0=全部符合原版筛选条件的场景
+  max_samples: 1000     # 沿用官方教师样本上限；0=全部合格场景
   random_seed: 42
 
 data:
@@ -39,11 +39,11 @@ sft:
   gradient_checkpointing: true
   quantization_bits: 0
   per_device_batch_size: 1
-  max_steps: 2          # -1=按 num_epochs 完整训练；正整数=更新次数上限
+  max_steps: -1         # -1=按 num_epochs 完整训练；正整数=更新次数上限
   logging_steps: 1
   save_strategy: steps
   eval_strategy: steps
-  save_steps: 1
+  save_steps: 100
   save_total_limit: 2   # 标准完整 checkpoint 的保留总数，由 Trainer 管理最佳和最新候选
   best_metric: eval_loss
   greater_is_better: false
@@ -55,21 +55,21 @@ ppo:
     dropout: 0.0
     target_modules: auto
   learning_rate: 1.0e-05
-  num_epochs: 2
-  gradient_accumulation_steps: 1
+  num_epochs: 100
+  gradient_accumulation_steps: 16
   gradient_checkpointing: true
   quantization_bits: 4
-  batch_size: 4         # TRL query 数量；每条交通记录展开为 ATR、RA 两项
+  batch_size: 32        # TRL query 数量；每条交通记录展开为 ATR、RA 两项
   mini_batch_size: 2
-  optimization_epochs: 1
+  optimization_epochs: 2
   max_updates: 0
-  max_samples: 4        # 0=全部具有历史观测的交通记录
-  max_new_tokens: 1024
+  max_samples: 0        # 0=全部具有历史观测的交通记录
+  max_new_tokens: 2048
   temperature: 0.1
   top_k: 50
   top_p: 0.95
   whiten_rewards: true
-  gpu_memory_utilization: 0.25
+  gpu_memory_utilization: 0.9
 
 export:
   source: auto

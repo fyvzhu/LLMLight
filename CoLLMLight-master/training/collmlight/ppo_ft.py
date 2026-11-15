@@ -3,11 +3,13 @@ if __package__ in (None,''):
     import sys
     from pathlib import Path
     sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
-import gc,json,time,os,shutil,random,subprocess,sys
+import gc,json,time,os,shutil,random,sys
 from pathlib import Path
 from utils.prompts import SYSTEM_PROMPT,get_atr_user_prompt_wsys,get_ra_user_prompt_wsys
 from utils.training_config import ROOT,TrainingConfig,atomic_json,read_json,digest,config_args
-from utils.experiment import metrics,exclusive_stage,stage_summary,training_log,clean_workspace,link_model_file
+from utils.experiment import metrics,exclusive_stage,stage_summary,clean_workspace,link_model_file
+from utils.training_console import run_logged_process
+from tqdm import tqdm
 
 class VLLMLocalGenerator:
     """Local VLLM generator, supports dynamic reloading of LoRA weights."""
@@ -347,8 +349,8 @@ def rollout(cfg, epoch, train, evaluation, adapter):
         'groups':{'train':train,'eval':evaluation}})
     log=cfg.out/'logs/train.log'
     env=dict(os.environ,USE_TF='0',VLLM_USE_V1='0',TOKENIZERS_PARALLELISM='false',VLLM_WORKER_MULTIPROC_METHOD='spawn')
-    with training_log(cfg,f'vllm epoch={epoch} workspace={folder.name}') as f:
-        result=subprocess.run([sys.executable,'-m','training.collmlight.ppo_ft','--rollout-request',str(request),'--output',str(output)],cwd=ROOT,env=env,stdout=f,stderr=subprocess.STDOUT)
+    result=run_logged_process(cfg,[sys.executable,'-m','training.collmlight.ppo_ft','--rollout-request',str(request),'--output',str(output)],
+        f'PPO vLLM epoch={epoch} workspace={folder.name}',env)
     if result.returncode:raise RuntimeError(f'vLLM epoch rollout failed: {log}')
     return read_json(output),folder
 
@@ -372,6 +374,7 @@ def select_best(cfg, epoch, evaluation, updates):
     checkpoint=cfg.artifact('ppo_checkpoints')/f'epoch_{epoch}'
     score=evaluation['ra_reward']
     metrics(cfg,'ppo_eval',{'epoch':epoch,'updates':updates,'checkpoint':str(checkpoint),'metric':'ra_reward','score':score,'atr_reward':evaluation['atr_reward']})
+    print(f'[PPO validation] epoch={epoch} RA reward={score:.4f} ATR reward={evaluation["atr_reward"]:.4f}',flush=True)
     atomic_json(checkpoint/'evaluation.json',{'ra_reward':evaluation['ra_reward'],'atr_reward':evaluation['atr_reward'],
         'sample_count':len(evaluation['examples'])})
     best=cfg.artifact('ppo_best')
@@ -386,6 +389,7 @@ def select_best(cfg, epoch, evaluation, updates):
     temporary.rename(best)
     if old.exists():shutil.rmtree(old)
     metrics(cfg,'selection',{'stage':'ppo','event':'new_best',**meta})
+    print(f'[PPO best] epoch={epoch} RA reward={score:.4f}',flush=True)
 
 def build_trainer(cfg,previous=None):
     from trl import PPOTrainer,PPOConfig
@@ -411,9 +415,12 @@ def run(cfg):
     checkpoints=cfg.artifact('ppo_checkpoints');checkpoints.mkdir(parents=True,exist_ok=True)
     updates=0
     for epoch in range(1,cfg['PPO_NUM_EPOCHS']+1):
+        print(f'\n[PPO] epoch {epoch}/{cfg["PPO_NUM_EPOCHS"]}; cumulative updates={updates}',flush=True)
         target=checkpoints/f'epoch_{epoch}'
         if (target/'complete.json').exists():
-            updates=read_json(target/'progress.json')['updates'];continue
+            updates=read_json(target/'progress.json')['updates']
+            print(f'[PPO] epoch {epoch} already saved; skipping',flush=True)
+            continue
         if target.exists():raise FileExistsError(f'Incomplete checkpoint must be inspected, not overwritten: {target}')
         previous=checkpoints/f'epoch_{epoch-1}' if epoch>1 else None
         generated,workspace=rollout(cfg,epoch,train,evaluation,previous)
@@ -429,7 +436,8 @@ def run(cfg):
         metrics(cfg,'ppo_epoch',{'epoch':epoch,'traffic_records':len(rows),'used_records':usable,'dropped_tail':len(rows)-usable,
             'backend':'vllm','quantization_bits':cfg['PPO_QUANTIZATION_BITS'],'whiten_rewards':cfg['PPO_WHITEN_REWARDS'],'trainable_tensor_count':len(trainable),
             'optimizer_lifecycle':'reinitialized_each_epoch','value_head_lifecycle':'reinitialized_each_epoch'})
-        for start in range(0,usable,per_batch):
+        progress=tqdm(range(0,usable,per_batch),desc=f'PPO Training epoch {epoch}/{cfg["PPO_NUM_EPOCHS"]}',unit='update',dynamic_ncols=True)
+        for start in progress:
             queries,responses,rewards=prepare_ppo_data_from_offline(rows[start:start+per_batch],tokenizer,trainer.accelerator.device)
             if len(queries)!=cfg['PPO_BATCH_SIZE']:raise RuntimeError('Actual query batch mismatch')
             stats=trainer.step(queries,responses,rewards);updates+=1
@@ -439,6 +447,11 @@ def run(cfg):
                 'atr_reward':sum(r['reward_atr'] for r in rows[start:start+per_batch])/per_batch,
                 'ra_reward':sum(r['reward_ra'] for r in rows[start:start+per_batch])/per_batch,
                 'statistics':{key:float(value) for key,value in stats.items() if __import__('numpy').ndim(value)==0}})
+            progress.set_postfix(update=updates,ra_reward=f'{sum(r["reward_ra"] for r in rows[start:start+per_batch])/per_batch:.3f}',
+                atr_reward=f'{sum(r["reward_atr"] for r in rows[start:start+per_batch])/per_batch:.3f}',
+                policy_loss=f'{float(stats.get("ppo/loss/policy",float("nan"))):.4f}',
+                value_loss=f'{float(stats.get("ppo/loss/value",float("nan"))):.4f}',
+                kl=f'{float(stats.get("objective/kl",float("nan"))):.4f}')
         changed=weight_change(trainer.model,before)
         frozen_after=frozen_fingerprint(trainer.model)
         if frozen_before!=frozen_after:raise RuntimeError("Frozen base weights changed")
@@ -447,6 +460,7 @@ def run(cfg):
         temporary.mkdir();trainer.save_pretrained(str(temporary));tokenizer.save_pretrained(temporary)
         atomic_json(temporary/'progress.json',{'epoch':epoch,'updates':updates,'changed_trainable_tensors':len(changed),'changed_lora_tensors':sum('lora_' in n for n in changed),'changed_value_head_tensors':sum('v_head' in n for n in changed),'frozen_base_unchanged':frozen_before==frozen_after,'frozen_weights_sha256':frozen_after})
         atomic_json(temporary/'complete.json',{'epoch':epoch});temporary.rename(target)
+        print(f'[PPO checkpoint] saved epoch={epoch}, updates={updates}: {target}',flush=True)
         clean_workspace(cfg.out,workspace)
         del trainer,tokenizer,before,queries,responses,rewards;gc.collect();torch.cuda.empty_cache()
     final=checkpoints/f"epoch_{cfg['PPO_NUM_EPOCHS']}"

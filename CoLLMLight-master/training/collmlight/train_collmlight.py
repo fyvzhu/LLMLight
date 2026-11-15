@@ -8,10 +8,10 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 from utils.training_config import ROOT, TrainingConfig, atomic_json, read_json, config_args, digest
-from utils.experiment import create_run, stage_state, append_jsonl, stage_summary, training_log
+from utils.experiment import create_run, stage_state, append_jsonl, stage_summary
+from utils.training_console import run_logged_process
 
 
 def preflight(cfg):
@@ -99,14 +99,20 @@ def run_stage(cfg, name, module, extra=()):
     print('Stage:',name,'log:',log,flush=True)
     from utils.source_snapshot import snapshot
     before=snapshot()
-    with training_log(cfg,f'stage={name} attempt={attempt}') as stream:
-        started=time.perf_counter()
-        result=subprocess.run(command,cwd=ROOT,env=env,stdout=stream,stderr=subprocess.STDOUT)
-        elapsed=time.perf_counter()-started
+    started=time.perf_counter()
+    try:
+        result=run_logged_process(cfg,command,f'stage={name} attempt={attempt}',env)
+    except BaseException as exc:
+        stage_state(cfg.out,name,'failed',attempt=attempt,error=type(exc).__name__,
+                    elapsed_seconds=time.perf_counter()-started)
+        print(f'Stage {name} interrupted/failed; inspect {log}',flush=True)
+        raise
+    elapsed=time.perf_counter()-started
     after=snapshot()
     if before['files']!=after['files']:
         append_jsonl(cfg.out/'logs/events.jsonl',{'event':'code_changed_during_stage','stage':name})
     stage_state(cfg.out,name,'completed' if result.returncode==0 else 'failed',returncode=result.returncode,log=str(log.relative_to(cfg.out)),elapsed_seconds=elapsed)
+    print(f'Stage: {name} {"completed" if result.returncode==0 else "failed"} ({elapsed:.1f}s)',flush=True)
     if result.returncode:raise RuntimeError(f'{name} failed: inspect {log}')
 
 

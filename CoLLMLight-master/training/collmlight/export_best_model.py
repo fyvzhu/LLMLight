@@ -7,7 +7,6 @@ if __package__ in (None, ""):
 import gc
 import os
 import sys
-import subprocess
 import hashlib
 import shutil
 import tempfile
@@ -56,7 +55,8 @@ def best_source(cfg):
     return source,meta,evaluation
 
 
-from utils.experiment import exclusive_stage, training_log, stage_summary
+from utils.experiment import exclusive_stage, stage_summary
+from utils.training_console import run_logged_process
 
 @exclusive_stage
 def export_best(cfg):
@@ -123,8 +123,7 @@ def export_best(cfg):
         command=[sys.executable,'-m','training.collmlight.ppo_ft','--config',str(cfg.config_file),'--run-dir',str(cfg.out),
             '--evaluate-model',str(temp),'--output',str(output)]
         if cfg.env_file:command+=['--env-file',str(cfg.env_file)]
-        with training_log(cfg,'export integrity through official PPO protocol') as log:
-            result=subprocess.run(command,cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT)
+        result=run_logged_process(cfg,command,'export integrity through official PPO protocol',env)
         if result.returncode:raise RuntimeError(f'Official-protocol export integrity inference failed: {logfile}')
         validated=read_json(output)
         output.unlink()

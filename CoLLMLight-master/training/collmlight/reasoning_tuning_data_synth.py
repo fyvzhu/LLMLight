@@ -7,6 +7,8 @@ import json
 import re
 import random
 import time
+import sys
+from tqdm import tqdm
 from utils.LLMs import GPT_model
 from utils.prompts import *
 from utils.training_config import TrainingConfig,atomic_json,read_json,config_args
@@ -172,9 +174,17 @@ def get_ra_results_by_LLM(ra_user_prompt):
 
 def _request(cfg,task,index,function,*args):
     start=time.perf_counter();before=LLM.requests_count;usage=dict(LLM.usage)
-    try:return function(*args)
+    succeeded=False
+    tqdm.write(f'[Teacher] record={index+1} task={task.upper()} requesting',file=sys.stderr)
+    try:
+        result=function(*args)
+        succeeded=True
+        return result
     finally:
         attempts=LLM.requests_count-before
+        status='completed' if succeeded else 'failed/interrupted'
+        tqdm.write(f'[Teacher] record={index+1} task={task.upper()} {status}; '
+            f'elapsed={time.perf_counter()-start:.1f}s attempts={attempts} retries={max(0,attempts-1)}',file=sys.stderr)
         append_jsonl(cfg.out/'logs/teacher_requests.jsonl',{'record_index':index,'task':task,
             'model':cfg['TEACHER_MODEL'],'attempts':attempts,'retries':max(0,attempts-1),
             'latency_s':time.perf_counter()-start,'usage':{k:LLM.usage.get(k,0)-usage.get(k,0) for k in LLM.usage}})
@@ -206,16 +216,20 @@ def synthesize(cfg):
     if len(total_data)>len(data_list) or any(row['data']!=data_list[i] for i,row in enumerate(total_data)):
         raise ValueError('Existing teacher prefix belongs to different input data')
     resumed=len(total_data)
-    for i,data in enumerate(data_list):
-        if i<resumed:continue
+    print(f'[Teacher] selected={len(data_list)} records; resumed={resumed}; model={cfg["TEACHER_MODEL"]}',flush=True)
+    progress=tqdm(range(resumed,len(data_list)),initial=resumed,total=len(data_list),desc='Teacher ATR/RA',unit='record',dynamic_ncols=True)
+    for i in progress:
+        data=data_list[i]
         atr_user_prompt=get_atr_user_prompt(data)
+        progress.set_postfix(task='ATR',tokens=LLM.usage['total_tokens'])
         atr_results,complex_level=_request(cfg,'atr',i,get_atr_results_by_LLM,data)
         ra_user_prompt=get_ra_user_prompt(data,atr_results)
+        progress.set_postfix(task='RA',tokens=LLM.usage['total_tokens'])
         ra_results=_request(cfg,'ra',i,get_ra_results_by_LLM,ra_user_prompt)
         total_data.append({'atr_user_prompt':atr_user_prompt,'atr_output':atr_results,
             'ra_user_prompt':ra_user_prompt,'ra_output':ra_results,'data':data,'complex_level':complex_level})
         atomic_json(output,total_data)
-        print(f'Teacher completed {len(total_data)}/{len(data_list)}',flush=True)
+        progress.set_postfix(task='saved',tokens=LLM.usage['total_tokens'])
     stage_summary(cfg,'teacher',{'input_records':len(init_data_list),'selected':len(data_list),
         'completed':len(total_data),'resumed_records':resumed,'requests_this_run':LLM.requests_count,'usage_this_run':LLM.usage})
     return total_data

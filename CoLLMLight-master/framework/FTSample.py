@@ -267,7 +267,9 @@ class FTS:
         self.veh_last_release_mark = {}
         self.inter_ct = defaultdict(int) 
         
-        for step_num in tqdm(range(min(int(total_run_cnt / self.dic_traffic_env_conf['MIN_ACTION_TIME']), self.my_config.get("max_sampling_steps", 10**9)))):
+        progress=tqdm(range(min(int(total_run_cnt / self.dic_traffic_env_conf['MIN_ACTION_TIME']), self.my_config.get("max_sampling_steps", 10**9))),
+                      desc='Traffic sampling',unit='step',dynamic_ncols=True)
+        for step_num in progress:
             if done or current_time >= total_run_cnt:
                 break
             
@@ -316,7 +318,10 @@ class FTS:
             self.archive = self.save_env()
 
             ## data sample
-            for inter_id in tqdm(prompt_agent_id_list):
+            intersections=tqdm(prompt_agent_id_list,desc=f'Sampling step {step_num+1}: intersections',
+                               unit='junction',leave=False,dynamic_ncols=True)
+            for inter_id in intersections:
+                intersections.set_postfix(intersection=self.intersection_list[inter_id],records=len(self.FT_data),refresh=False)
                 best_reward = float('inf')
                 inter_rewards_dict = {}
                 if inter_id in self.sampled_inter_signal:
@@ -338,6 +343,8 @@ class FTS:
                 # new_data['Signal_Consequence'] = {}
                 signal_consequence = {}
                 for i in range(len(self.signal_list)):
+                    intersections.set_postfix(intersection=self.intersection_list[inter_id],
+                        signal=self.signal_list[i],records=len(self.FT_data))
                     new_action_list = action_list[:]
                     new_action_list[inter_id] = i
                     # self.env.eng.load(self.archive)
@@ -421,6 +428,8 @@ class FTS:
             att = self.calc_avg_travel_time()
             att = round(att,3)
             throughput = self.calc_throughput()
+            progress.set_postfix(records=len(self.FT_data),simulation_time=f'{current_time:.0f}s',
+                                 ATT=att,AWT=awt,AQL=aql)
             print("Queuing Vehicles:", np.sum(queue_length_inter), "Veh num: ", veh_num, "new Vehs: ", veh_num - last_veh_num, "AWT: ", awt, "AQL:", aql, "ATT:", att, 'Throughput:', throughput)
             self.history_data['perf']['AWT'].append(awt)
             self.history_data['perf']['AQL'].append(aql)
@@ -1652,4 +1661,3 @@ class FTS:
             rewards.append(reward)
 
         return rewards
-    

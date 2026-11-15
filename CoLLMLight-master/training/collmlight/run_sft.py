@@ -115,6 +115,8 @@ def archive_best(cfg, state):
     if old.exists():
         shutil.rmtree(old)
     metrics(cfg, 'selection', {'stage': 'sft', 'event': 'new_best', **meta})
+    from tqdm import tqdm
+    tqdm.write(f'[SFT best] step={meta["step"]} eval_loss={meta["score"]:.6f}')
     return meta
 
 
@@ -161,6 +163,8 @@ class SFTArtifacts(TrainerCallback):
             'checkpoint_signature': self.signature}
         atomic_json(folder/'evaluation.json', self.evaluation[1])
         atomic_json(folder/'best_model.json', meta)
+        from tqdm import tqdm
+        tqdm.write(f'[SFT checkpoint] step={state.global_step} eval_loss={meta["score"]:.6f}: {folder}')
         archive_best(self.cfg, state)
 
     def on_train_end(self, args, state, control, **kwargs):
@@ -175,6 +179,7 @@ def run(cfg):
                                        lora_for, versions, trainable_snapshot)
     seed_all(cfg['RANDOM_SEED'])
     versions(cfg)
+    print('[SFT] Loading tokenizer and preparing train/eval examples',flush=True)
     tokenizer = tokenizer_for(cfg.path('STUDENT_MODEL_PATH'))
     tokenizer.padding_side = 'right'
     datasets = {s: Dataset.from_list([tokenize_example(tokenizer, e, cfg['STUDENT_MAX_LENGTH'])
@@ -199,13 +204,15 @@ def run(cfg):
         stage_summary(cfg,'sft',{k:v for k,v in report.items() if k!='best'} | {'best_model':'models/sft_best','best_checkpoint':best['checkpoint']})
         print(report,flush=True)
         return report
+    print(f'[SFT] train={len(datasets["train"])} eval={len(datasets["eval"])}; '
+          f'loading student; resume step={resumed_step}',flush=True)
     model = load_student(cfg, cfg.path('STUDENT_MODEL_PATH'), 'SFT')
     args = SFTConfig(output_dir=str(checkpoint_root),
         max_steps=cfg['SFT_MAX_STEPS'], num_train_epochs=cfg['SFT_NUM_EPOCHS'],
         per_device_train_batch_size=cfg['SFT_PER_DEVICE_BATCH_SIZE'], per_device_eval_batch_size=1,
         gradient_accumulation_steps=cfg['SFT_GRADIENT_ACCUMULATION_STEPS'],
         learning_rate=cfg['SFT_LEARNING_RATE'], bf16=dtype == torch.bfloat16,
-        fp16=dtype == torch.float16, report_to='none',
+        fp16=dtype == torch.float16, report_to='none', disable_tqdm=False,
         save_strategy=cfg['SFT_SAVE_STRATEGY'], eval_strategy=cfg['SFT_EVAL_STRATEGY'],
         save_steps=cfg['SFT_SAVE_STEPS'], eval_steps=cfg['SFT_SAVE_STEPS'],
         save_total_limit=cfg['SFT_SAVE_TOTAL_LIMIT'], save_only_model=False,
