@@ -6,6 +6,8 @@
 
 使用现有 `CoLLMLight-master/.venv`。教师和学生模型连接设置在 `.env`；训练与评测参数统一在 `config/config.yaml`。只修改这一份主配置即可调整数据量和训练轮次，不需要建立“调通专用”配置。
 
+当前学生配置示例使用 `STUDENT_MAX_LENGTH=12288`（在`.env`中设置），覆盖本次Qwen全量SFT样本及PPO提示词加生成预算。该值是完整聊天序列的上下文预算，不是输出token上限；相较原版8192属于明确的配置差异，仍须满足实际基础模型的上下文上限和显存条件。已冻结为8192的失败训练目录不直接改配置续训，应复用现有数据新建训练运行。
+
 输出根目录为顶层 `output_root`，训练随机种子在 `training.random_seed`。算法名称固定为CoLLMLight，不在YAML中配置，也没有experiment分组或实验模式开关。教师数据抽样和CityFlow评测分别使用其各自的random_seed/seed。
 
 ```yaml
@@ -16,7 +18,7 @@ training:
   data_preparation: sample_and_generate
 ```
 
-当前配置数值有限，以适配现有资源：采样3个决策步、教师2条、SFT最多2次更新、PPO最多4条记录和2个外层epoch。采样、数据上限、训练更新上限均由YAML控制，不在代码中固定为小规模。正式运行可修改对应参数：sampling.max_steps=0、teacher_data.max_samples=0、sft.max_steps=-1、ppo.max_samples=0，并设置需要的epoch/batch等值。
+当前主配置采用完整4×4仿真采样（120个30秒决策步）、最多1000条合格教师记录、SFT完整1个epoch、PPO完整100个epoch。采样断点默认每5个完整决策步保存一次。小规模检查可直接调整同一YAML中的数据和训练上限，不需要另一套配置。
 
 ## 两个入口
 
@@ -95,6 +97,29 @@ data/FinetuneData/
 
 独立采样入口`run_fts.py`和训练入口共用发布版FTS算法及同一参数转换、环境配置构造和执行函数。`sampling`配置可设置dataset、traffic_file、reward_type、reward_period、max_steps，以及ignore_threshold、long_info、feed_back、feed_back_num、debug_wollm。后几个字段未填写时沿用官方入口默认值。独立运行示例：`.venv/bin/python run_fts.py --max_sampling_steps 1`；仅显式提供的CLI参数覆盖YAML，并冻结实际采样配置。
 
+## 采样断点恢复
+
+`sampling.checkpoint_interval_steps: 5`表示每完成5个采样决策步保存一次；最后一步即使不足间隔也保存。每步先完成所有路口候选试验、执行真实动作并更新历史及累计指标，再提交快照。保持官方FTS决策、前瞻和奖励计算不变。
+
+每次运行只保留`checkpoints/sampling/latest.ckpt`一份有效断点。它打包CityFlow原生快照、Python环境与智能体历史、已完成样本、循环进度、随机数状态以及仿真日志字节位置。新文件校验并刷盘后原子替换旧文件；写入期间短暂需要额外空间。失败或强制结束可能留下同目录的`.writing`临时目录，下一次保存会清理，不会把它当成有效断点。正式采样数据及完成状态提交成功后清理恢复文件。
+
+```bash
+# 独立采样；输出Sampling run目录
+.venv/bin/python run_fts.py
+
+# 独立采样中断后恢复，指定同一次运行目录
+.venv/bin/python run_fts.py --resume-run outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
+
+# 总训练入口中断后恢复，采样阶段也使用同一套恢复逻辑
+.venv/bin/python training/collmlight/train_collmlight.py --resume-run outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
+```
+
+独立采样运行用run_fts恢复，总训练运行用train_collmlight恢复。恢复使用原运行冻结配置，不创建新的时间戳目录；总训练入口要求主配置与原运行一致。采样会核对代码、Python/NumPy/CityFlow、配置以及路网/车流文件指纹，不做旧格式兼容或静默从头重跑。仅有旧JSON而没有完整断点的运行不能精确恢复。
+
+例如第7步试验途中中断，最近断点是完成第5步，恢复后从第6步继续；未保存的第6步需要重做。恢复时JSON和仿真日志回退到断点对应状态，终端诊断日志继续追加，保留中断记录。断点内Python状态只允许加载自己生成、可信且未被他人修改的本地文件。
+
+断点机制不缩短采样本身的计算时间，也不保证恢复尚未保存的进度。仍建议在tmux中运行。验收使用真实CityFlow进行不同进程的连续/中断恢复对照，详见`my_tests/采样断点恢复测试结果.md`。
+
 ## 输出
 
 ```text
@@ -121,6 +146,7 @@ outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒/
 │   ├── events.jsonl             # 阶段状态转换和耗时
 │   └── teacher_requests.jsonl   # 教师请求、用量和失败信息
 ├── metrics/                    # SFT/PPO逐步训练、验证、选优及生成统计
+├── checkpoints/sampling/latest.ckpt # 采样期间唯一恢复点，成功提交后清理
 ├── records/sampling/            # 采样车辆原始CSV等
 └── evaluations/数据集_年月日_时分秒_微秒/
     ├── config.json             # 实际评测参数、模型/数据指纹和服务身份

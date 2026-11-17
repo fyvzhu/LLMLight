@@ -55,7 +55,11 @@ class FTS:
         self.initialize()
         
     def initialize(self):
-        path_check(self.dic_path)
+        if self.my_config.get('resume_sampling'):
+            for key in ('PATH_TO_WORK_DIRECTORY','PATH_TO_MODEL'):
+                os.makedirs(self.dic_path[key],exist_ok=True)
+        else:
+            path_check(self.dic_path)
         copy_conf_file(self.dic_path, self.dic_agent_conf, self.dic_traffic_env_conf)
         copy_cityflow_file(self.dic_path, self.dic_traffic_env_conf)
         os.makedirs(self.dic_path["PATH_TO_LOG"],exist_ok=True)
@@ -246,7 +250,7 @@ class FTS:
 
         return boundary_data
         
-    def test(self, logger, test_round):
+    def test(self, logger, test_round, checkpoint=None):
         print("================ Start Test ================")
         total_run_cnt = self.dic_traffic_env_conf["RUN_COUNTS"]
         # initialize output streams
@@ -267,7 +271,17 @@ class FTS:
         self.veh_last_release_mark = {}
         self.inter_ct = defaultdict(int) 
         
-        progress=tqdm(range(min(int(total_run_cnt / self.dic_traffic_env_conf['MIN_ACTION_TIME']), self.my_config.get("max_sampling_steps", 10**9))),
+        total_steps=min(int(total_run_cnt / self.dic_traffic_env_conf['MIN_ACTION_TIME']),self.my_config.get('max_sampling_steps',10**9))
+        start_step=0
+        if checkpoint is not None and checkpoint.available:
+            restored=checkpoint.restore(self)
+            start_step=restored['next_step']
+            done=restored['done'];current_time=restored['current_time']
+            current_states=restored['current_states'];current_outputs=restored['current_outputs']
+            last_action_list=restored['last_action_list'];last_veh_num=restored['last_veh_num']
+            total_reward=restored['total_reward']
+            queue_length_episode=restored['queue_length_episode'];waiting_time_episode=restored['waiting_time_episode']
+        progress=tqdm(range(start_step,total_steps),initial=start_step,total=total_steps,
                       desc='Traffic sampling',unit='step',dynamic_ncols=True)
         for step_num in progress:
             if done or current_time >= total_run_cnt:
@@ -372,12 +386,6 @@ class FTS:
                 action_list[inter_id] = best_action_id
                 # print(self.signal_list[0])
                 self.FT_data.append(new_data)
-            sample_path = self.my_config.get('sample_output', str(Path(self.dic_path['PATH_TO_WORK_DIRECTORY'])/'traffic_samples.json'))
-            os.makedirs(os.path.dirname(sample_path), exist_ok=True)
-            with open(sample_path, 'w') as f:
-                json.dump(self.FT_data, f, indent=4)
-
-
             # self.env.eng.load(self.archive)
             self.load_env(self.archive)
             next_state, _, done, _ = self.env.step(action_list)
@@ -439,6 +447,14 @@ class FTS:
             self.show_boundary_data()
             self.show_car_num()
             last_veh_num = veh_num
+            from utils.training_config import atomic_json
+            atomic_json(Path(self.my_config['sample_output']),self.FT_data)
+            if checkpoint is not None:
+                checkpoint.maybe_save(self,{'next_step':step_num+1,'done':done,'current_time':current_time,
+                    'current_states':current_states,'current_outputs':current_outputs,'last_action_list':last_action_list,
+                    'last_veh_num':last_veh_num,'total_reward':total_reward,
+                    'queue_length_episode':queue_length_episode,'waiting_time_episode':waiting_time_episode},
+                    final=done or current_time>=total_run_cnt or step_num+1==total_steps)
             # if self.memo == 'FT_avgql1_s8k':
             #     self.plot_performance_data()
         # wandb logger

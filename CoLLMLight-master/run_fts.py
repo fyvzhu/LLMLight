@@ -28,15 +28,17 @@ def parse_args(argv=None):
     parser.add_argument("--reward_period", type=int, default=5)
     parser.add_argument("--ignore_threshold", type=float, default=0)
     parser.add_argument('--max_sampling_steps',type=int,default=0)
+    parser.add_argument('--checkpoint_interval_steps',type=int,default=5)
     parser.add_argument('--seed',type=int,default=42)
     parser.add_argument('--config',dest='config_file',default=None)
     parser.add_argument('--run-dir',default=None)
+    parser.add_argument('--resume-run',default=None)
     arguments=sys.argv[1:] if argv is None else list(argv)
     result=parser.parse_args(arguments)
     result._explicit={parser._option_string_actions[token.split('=',1)[0]].dest for token in arguments if token.split('=',1)[0] in parser._option_string_actions}
     return result
 
-SAMPLING_CONFIG_FIELDS = {'max_sampling_steps': 'SAMPLING_MAX_STEPS', 'dataset': 'SAMPLING_DATASET', 'traffic_file': 'SAMPLING_TRAFFIC_FILE', 'reward_type': 'SAMPLING_REWARD_TYPE', 'reward_period': 'SAMPLING_REWARD_PERIOD', 'ignore_threshold': 'SAMPLING_IGNORE_THRESHOLD', 'long_info': 'SAMPLING_LONG_INFO', 'feed_back': 'SAMPLING_FEED_BACK', 'feed_back_num': 'SAMPLING_FEED_BACK_NUM', 'debug_wollm': 'SAMPLING_DEBUG'}
+SAMPLING_CONFIG_FIELDS = {'checkpoint_interval_steps': 'SAMPLING_CHECKPOINT_INTERVAL_STEPS', 'max_sampling_steps': 'SAMPLING_MAX_STEPS', 'dataset': 'SAMPLING_DATASET', 'traffic_file': 'SAMPLING_TRAFFIC_FILE', 'reward_type': 'SAMPLING_REWARD_TYPE', 'reward_period': 'SAMPLING_REWARD_PERIOD', 'ignore_threshold': 'SAMPLING_IGNORE_THRESHOLD', 'long_info': 'SAMPLING_LONG_INFO', 'feed_back': 'SAMPLING_FEED_BACK', 'feed_back_num': 'SAMPLING_FEED_BACK_NUM', 'debug_wollm': 'SAMPLING_DEBUG'}
 
 
 def sampling_arguments(cfg,overrides=None):
@@ -44,7 +46,7 @@ def sampling_arguments(cfg,overrides=None):
     for argument,key in SAMPLING_CONFIG_FIELDS.items():setattr(args,argument,cfg[key])
     args.seed=cfg['RANDOM_SEED'];args.memo=cfg['RUN_NAME']
     if overrides is not None:
-        for name in overrides._explicit-{'config_file','run_dir'}:setattr(args,name,getattr(overrides,name))
+        for name in overrides._explicit-{'config_file','run_dir','resume_run'}:setattr(args,name,getattr(overrides,name))
     return args
 
 
@@ -171,7 +173,8 @@ def build_sampling_config(in_args,cfg):
     env['MODEL_NAME']='FTS'
     if in_args.max_sampling_steps<0:raise ValueError('max_sampling_steps must be nonnegative')
     my_config.update(max_sampling_steps=in_args.max_sampling_steps or count//env['MIN_ACTION_TIME'],
-        sample_output=str(cfg.path('TRAFFIC_SAMPLE_PATH')),evaluation_dir=str(cfg.out))
+        sample_output=str(cfg.path('TRAFFIC_SAMPLE_PATH')),evaluation_dir=str(cfg.out),
+        checkpoint_interval_steps=in_args.checkpoint_interval_steps)
     return dic_agent_conf_extra,env,dic_path_extra,my_config,f'{template}-{road_net}',in_args.traffic_file.split('.')[0]
 
 
@@ -183,15 +186,25 @@ def run_sampling(cfg,args):
     from utils.experiment import stage_summary,clean_workspace
     if not cfg.run_dir:raise ValueError('Sampling requires a managed output directory')
     output=cfg.path('TRAFFIC_SAMPLE_PATH')
-    if output.exists():raise FileExistsError(f'Refusing to overwrite existing samples: {output}')
     random.seed(args.seed);np.random.seed(args.seed);os.chdir(ROOT)
     agent,env,paths,options,roadnet,flow=build_sampling_config(args,cfg)
+    from utils.sampling_checkpoint import SamplingCheckpoint
+    checkpoint=SamplingCheckpoint(cfg,agent,env,paths,options)
+    completed=checkpoint.completed_result()
+    if completed is not None:
+        checkpoint.cleanup()
+        clean_workspace(cfg.out,cfg.out/'tmp/sampling')
+        return completed
     stage_summary(cfg,'sample',{'settings':{k:getattr(args,k) for k in SAMPLING_CONFIG_FIELDS},'seed':args.seed})
+    checkpoint.require_resumable_output()
+    options['resume_sampling']=checkpoint.available
     sampler=FTS(agent,env,paths,roadnet,flow,options)
     class LocalLogger:
         def log(self,values):stage_summary(cfg,'sample',{'seed':args.seed,'settings':{k:getattr(args,k) for k in SAMPLING_CONFIG_FIELDS},'metrics':values})
-    result=sampler.test(LocalLogger(),0)
+    result=sampler.test(LocalLogger(),0,checkpoint=checkpoint)
+    checkpoint.commit(result)
     print('Sampling complete:',output,'records:',len(sampler.FT_data),flush=True)
+    checkpoint.cleanup()
     clean_workspace(cfg.out,cfg.out/'tmp/sampling')
     return result
 
@@ -199,7 +212,12 @@ def run_sampling(cfg,args):
 def main(in_args):
     from utils.training_config import TrainingConfig,read_json,atomic_json
     from utils.experiment import create_run,exclusive_stage,stage_state,training_log
-    cfg=TrainingConfig(config_file=in_args.config_file,run_dir=in_args.run_dir)
+    if in_args.run_dir and in_args.resume_run:raise ValueError('Choose --run-dir or --resume-run')
+    cfg=TrainingConfig(config_file=in_args.config_file,run_dir=in_args.resume_run or in_args.run_dir)
+    if in_args.resume_run:
+        existing=read_json(cfg.out/'manifest.json')
+        if existing['training_mode']!='sampling_only':raise ValueError('Resume a training run through train_collmlight.py --resume-run')
+        if existing['state']=='completed':raise ValueError('Sampling already completed')
     args=sampling_arguments(cfg,in_args)
     if cfg.run_dir:
         # A managed run's frozen sampling settings cannot be silently replaced.
@@ -210,13 +228,16 @@ def main(in_args):
         cfg.values.update(RANDOM_SEED=args.seed,ENABLE_PPO=False,DATA_PREPARATION='sample_and_generate')
         folder=create_run(cfg);cfg=TrainingConfig(config_file=cfg.config_file,run_dir=folder)
     print('Sampling run:',cfg.out,flush=True)
-    manifest=read_json(cfg.out/'manifest.json');manifest.update(state='running',training_mode='sampling_only')
+    manifest=read_json(cfg.out/'manifest.json')
+    if manifest.get('state')=='completed':raise ValueError('Run already completed')
+    attempt=manifest['stages'].get('sample',{}).get('attempt',0)+1
+    manifest.update(state='running',training_mode='sampling_only')
     atomic_json(cfg.out/'manifest.json',manifest)
     try:
         import contextlib,sys
         from utils.baseline_archive import Tee
-        stage_state(cfg.out,'sample','running',attempt=1,log='logs/train.log')
-        with training_log(cfg,'stage=sample attempt=1') as stream,contextlib.redirect_stdout(Tee(sys.stdout,stream)),contextlib.redirect_stderr(Tee(sys.stderr,stream)):
+        stage_state(cfg.out,'sample','running',attempt=attempt,log='logs/train.log')
+        with training_log(cfg,f'stage=sample attempt={attempt}') as stream,contextlib.redirect_stdout(Tee(sys.stdout,stream)),contextlib.redirect_stderr(Tee(sys.stderr,stream)):
             result=exclusive_stage(run_sampling)(cfg,args)
         stage_state(cfg.out,'sample','completed')
         manifest=read_json(cfg.out/'manifest.json');manifest['state']='completed';atomic_json(cfg.out/'manifest.json',manifest)

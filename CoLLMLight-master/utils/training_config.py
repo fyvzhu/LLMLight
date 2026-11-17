@@ -209,6 +209,7 @@ class TrainingConfig:
         for key in ('SFT_LEARNING_RATE', 'PPO_LEARNING_RATE', 'TEACHER_TEMPERATURE', 'PPO_TEMPERATURE'):
             if self[key] <= 0:
                 raise ValueError(f'{key} must be positive')
+        if self['SAMPLING_CHECKPOINT_INTERVAL_STEPS']<1:raise ValueError('sampling.checkpoint_interval_steps must be positive')
         if self['SAMPLING_MAX_STEPS']<0:raise ValueError('sampling.max_steps must be nonnegative; 0 means the complete simulation')
         if self['SFT_SAVE_TOTAL_LIMIT']<1:raise ValueError('sft.save_total_limit must be positive')
         if self['SFT_SAVE_STEPS']<1:raise ValueError('sft.save_steps must be positive')
