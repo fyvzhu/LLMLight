@@ -42,7 +42,7 @@ def checkpoint_signature(cfg, base_weights):
     """Bind native training state to the exact data, model and training plan."""
     from importlib.metadata import version
     from utils.training_config import digest
-    keys = [k for k in cfg.values if k.startswith('SFT_') and k != 'SFT_SOURCE_RUN']
+    keys = [k for k in cfg.values if k.startswith('SFT_')]
     keys += ['RANDOM_SEED', 'STUDENT_MODEL_PATH', 'STUDENT_DTYPE', 'STUDENT_MAX_LENGTH']
     return digest({'settings': {k: cfg[k] for k in keys}, 'base_weights': base_weights,
         'data': {name: file_hash(cfg.data_dir/'sft_data'/name)

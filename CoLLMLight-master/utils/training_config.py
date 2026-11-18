@@ -46,18 +46,19 @@ DEFAULTS.update(PPO_LORA_TARGET='auto', EXPORT_SOURCE='auto', EXPORT_OUTPUT_DIR=
                 CITYFLOW_MODEL_PATH='', CITYFLOW_BACKEND='llama', CITYFLOW_DATASET='synthetic_4x4',
                 CITYFLOW_TRAFFIC_FILE='anon_4_4_synthetic_8000.json', CITYFLOW_RUN_COUNTS=60,
                 CITYFLOW_MAX_NEW_TOKENS=1024, CITYFLOW_SEED=42)
-DEFAULTS.update(ENABLE_PPO=True, DATA_PREPARATION='reuse', SFT_SOURCE_RUN='', ALGORITHM=COLLMLIGHT_ALGORITHM,
+DEFAULTS.update(DATA_PREPARATION='reuse', ALGORITHM=COLLMLIGHT_ALGORITHM,
     PPO_WHITEN_REWARDS=True, PPO_MAX_SAMPLES=0, PPO_EVAL_RATIO=0.1, PPO_TOP_K=50, PPO_TOP_P=0.95,
     VLLM_GPU_MEMORY=0.25, SFT_SAVE_STEPS=1, SFT_SAVE_STRATEGY='epoch', SFT_BEST_METRIC='eval_loss',
     SFT_GREATER_IS_BETTER=False, SFT_EVAL_STRATEGY='epoch', SFT_SAVE_TOTAL_LIMIT=2, CITYFLOW_PORT=23333,
     CITYFLOW_DISABLE_SR=False, CITYFLOW_SYNCHRONOUS_SR=False)
+DEFAULTS.update(PPO_ROLLOUT_BATCH_SIZE=16, PPO_SAVE_STEPS=5, PPO_SAVE_TOTAL_LIMIT=2)
 # Sampling defaults come from the preserved official CLI, not another copy.
 from run_fts import parse_args as _sampling_args, SAMPLING_CONFIG_FIELDS
 _sampling_defaults=_sampling_args([])
 DEFAULTS.update({key:getattr(_sampling_defaults,argument) for argument,key in SAMPLING_CONFIG_FIELDS.items()})
 YAML_FIELDS = {
     'output_root': 'OUTPUT_ROOT',
-    'training': {'random_seed':'RANDOM_SEED','enable_ppo':'ENABLE_PPO','data_preparation':'DATA_PREPARATION','sft_source_run':'SFT_SOURCE_RUN'},
+    'training': {'random_seed':'RANDOM_SEED','data_preparation':'DATA_PREPARATION'},
     'inputs': {'traffic_samples':'TRAFFIC_INPUT_PATH','teacher_data':'TEACHER_INPUT_PATH'},
     'sampling': {('max_steps' if argument=='max_sampling_steps' else argument):key for argument,key in SAMPLING_CONFIG_FIELDS.items()},
     'teacher_data': {'max_samples':'TEACHER_MAX_SAMPLES','random_seed':'TEACHER_RANDOM_SEED'},
@@ -82,6 +83,7 @@ for _stage in ('sft', 'ppo'):
              'optimization_epochs':'OPTIMIZATION_EPOCHS','max_updates':'MAX_UPDATES',
              'max_new_tokens':'MAX_NEW_TOKENS','temperature':'TEMPERATURE'}.items()})}
 YAML_FIELDS['ppo'].update(whiten_rewards='PPO_WHITEN_REWARDS',max_samples='PPO_MAX_SAMPLES',top_k='PPO_TOP_K',top_p='PPO_TOP_P',gpu_memory_utilization='VLLM_GPU_MEMORY')
+YAML_FIELDS['ppo'].update(rollout_batch_size='PPO_ROLLOUT_BATCH_SIZE',save_steps='PPO_SAVE_STEPS',save_total_limit='PPO_SAVE_TOTAL_LIMIT')
 YAML_FIELDS['sft'].update(save_steps='SFT_SAVE_STEPS',save_total_limit='SFT_SAVE_TOTAL_LIMIT',save_strategy='SFT_SAVE_STRATEGY',eval_strategy='SFT_EVAL_STRATEGY',best_metric='SFT_BEST_METRIC',greater_is_better='SFT_GREATER_IS_BETTER')
 MODEL_KEYS = {k for k in DEFAULTS if k.startswith(('TEACHER_', 'STUDENT_'))} - {
     'TEACHER_MAX_SAMPLES', 'TEACHER_RANDOM_SEED', 'TEACHER_OUTPUT_PATH', 'TEACHER_INPUT_PATH'}
@@ -112,7 +114,7 @@ def read_yaml_config(path):
             if isinstance(target, dict):
                 walk(item, target, prefix + str(name) + '.')
             else:
-                if item is None and target in ('EXPORT_OUTPUT_DIR','CITYFLOW_MODEL_PATH','SFT_SOURCE_RUN','TRAFFIC_INPUT_PATH','TEACHER_INPUT_PATH'):
+                if item is None and target in ('EXPORT_OUTPUT_DIR','CITYFLOW_MODEL_PATH','TRAFFIC_INPUT_PATH','TEACHER_INPUT_PATH'):
                     item = ''
                 default = DEFAULTS[target]
                 if isinstance(default, bool) and not isinstance(item, bool):
@@ -149,8 +151,11 @@ def digest(value):
 
 
 class TrainingConfig:
-    def __init__(self, env_file=None, overrides=None, config_file=None, run_dir=None, evaluation=False):
+    def __init__(self, env_file=None, overrides=None, config_file=None, run_dir=None, evaluation=False,
+                 training_mode=None, sft_source=None):
         self.env_file = env_file
+        self.training_mode = training_mode or 'sft_ppo'
+        self.sft_source = Path(sft_source).resolve() if sft_source else None
         self.run_dir = Path(run_dir).resolve() if run_dir else None
         env_file = Path(env_file) if env_file else ROOT / '.env'
         if not env_file.is_absolute():
@@ -163,6 +168,8 @@ class TrainingConfig:
         self.raw = secrets_and_models
         effective = {k:v for k,v in secrets_and_models.items() if k in MODEL_KEYS}
         effective.update(read_yaml_config(self.config_file))
+        unknown=set(overrides or {})-set(DEFAULTS)
+        if unknown:raise ValueError(f'Unknown configuration overrides: {sorted(unknown)}')
         effective.update({k:v for k,v in (overrides or {}).items() if v is not None})
         self.values = {}
         for key, default in DEFAULTS.items():
@@ -179,11 +186,16 @@ class TrainingConfig:
         if self.run_dir:
             if not (self.run_dir/'manifest.json').is_file():
                 raise ValueError('run-dir must be an explicitly initialized experiment')
+            manifest=read_json(self.run_dir/'manifest.json')
             frozen = read_json(self.run_dir/'config/effective.json')
-            if digest(frozen)!=read_json(self.run_dir/'manifest.json')['configuration_sha256']:
+            if digest(frozen)!=manifest['configuration_sha256']:
                 raise ValueError('Immutable experiment configuration was modified')
             eval_values={k:v for k,v in self.values.items() if k.startswith('CITYFLOW_') }
-            self.values.update(frozen)
+            self.values.update({k:frozen[k] for k in DEFAULTS if k in frozen})
+            self.training_mode=manifest['training_mode']
+            if training_mode and training_mode!=self.training_mode:
+                raise ValueError('Resume through the entry corresponding to this run training_mode')
+            self.sft_source=Path(manifest['parent_run']) if manifest.get('parent_run') else None
             if evaluation:self.values.update(eval_values)
             self.values['TEACHER_OUTPUT_PATH'] = str(self.run_dir/'data/teacher_data/syn_rt_data.json')
         self.values['RUN_NAME']=self.values['ALGORITHM']
@@ -191,7 +203,7 @@ class TrainingConfig:
         self.values['MERGE_DEVICE'] = self.values['EXPORT_DEVICE']
         if not 0 < self['DATA_EVAL_RATIO'] < 1:
             raise ValueError('DATA_EVAL_RATIO must be between 0 and 1')
-        if self['ENABLE_PPO'] and not 0<self['PPO_EVAL_RATIO']<1:
+        if not 0<self['PPO_EVAL_RATIO']<1:
             raise ValueError('PPO eval ratio must be between 0 and 1')
         if not self['RUN_NAME'] or self['RUN_NAME'] in ('.','..') or Path(self['RUN_NAME']).name != self['RUN_NAME']:
             raise ValueError('RUN_NAME must be a directory name')
@@ -212,6 +224,8 @@ class TrainingConfig:
         if self['SAMPLING_CHECKPOINT_INTERVAL_STEPS']<1:raise ValueError('sampling.checkpoint_interval_steps must be positive')
         if self['SAMPLING_MAX_STEPS']<0:raise ValueError('sampling.max_steps must be nonnegative; 0 means the complete simulation')
         if self['SFT_SAVE_TOTAL_LIMIT']<1:raise ValueError('sft.save_total_limit must be positive')
+        for key in ('PPO_ROLLOUT_BATCH_SIZE','PPO_SAVE_STEPS','PPO_SAVE_TOTAL_LIMIT'):
+            if self[key]<1:raise ValueError(f'{key} must be positive')
         if self['SFT_SAVE_STEPS']<1:raise ValueError('sft.save_steps must be positive')
         if self['SFT_SAVE_STRATEGY'] != self['SFT_EVAL_STRATEGY'] or self['SFT_SAVE_STRATEGY'] not in ('epoch','steps'):
             raise ValueError('SFT save/eval strategies must match (epoch or steps)')
@@ -227,6 +241,10 @@ class TrainingConfig:
     def path(self, key):
         p = Path(self[key]).expanduser()
         return p.resolve() if p.is_absolute() else (ROOT / p).resolve()
+
+    @property
+    def selection_stage(self):
+        return 'sft' if self.training_mode=='sft_only' else 'ppo'
 
     @property
     def out(self):

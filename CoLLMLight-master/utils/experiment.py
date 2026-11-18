@@ -34,7 +34,10 @@ def append_jsonl(path, row):
 
 
 def metrics(cfg, name, row):
-    append_jsonl(cfg.out/'metrics'/f'{name}.jsonl', row)
+    stage='ppo' if name.startswith('ppo') or row.get('stage')=='ppo' else 'sft'
+    path=cfg.out/'manifest.json'
+    attempt=read_json(path).get('stages',{}).get(stage,{}).get('attempt',0) if path.exists() else 0
+    append_jsonl(cfg.out/'metrics'/f'{name}.jsonl', {'run_id':cfg.out.name,'attempt':attempt,**row})
 
 
 def create_run(cfg, now=None):
@@ -63,9 +66,12 @@ def create_run(cfg, now=None):
     atomic_json(folder/'config/code.json',snapshot())
     atomic_json(folder/'config/effective.json', values)
     atomic_json(folder/'manifest.json', {'schema_version':1,'run_id':folder.name,'algorithm':cfg['ALGORITHM'],
-        'training_mode':'sft_ppo' if cfg['ENABLE_PPO'] else 'sft_only','state':'created','stages':{},
+        'training_mode':cfg.training_mode,'state':'created','stages':{},
         'timezone':'Asia/Shanghai','created_at':now.isoformat(),'created_utc':now.astimezone(timezone.utc).isoformat(),'host':socket.gethostname(),
         'configuration_sha256':digest(values)})
+    if cfg.sft_source:
+        manifest=read_json(folder/'manifest.json');manifest['parent_run']=str(cfg.sft_source)
+        atomic_json(folder/'manifest.json',manifest)
     return folder
 
 
@@ -104,7 +110,8 @@ def clean_workspace(folder, workspace):
 def link_model_file(source, target):
     """Share immutable model payloads; mutable progress/selection metadata is copied."""
     name=Path(source).name
-    if name in {'adapter_model.safetensors','pytorch_model.bin','adapter_config.json',
+    if name.endswith('.safetensors') or (name.startswith('pytorch_model') and name.endswith('.bin')) or name in {'adapter_config.json',
+                'model.safetensors.index.json','pytorch_model.bin.index.json',
                 'config.json','generation_config.json','tokenizer.json','tokenizer_config.json',
                 'special_tokens_map.json','added_tokens.json','vocab.json','merges.txt','tokenizer.model'}:
         return os.link(source,target)

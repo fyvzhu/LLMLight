@@ -27,7 +27,7 @@ def archive_algorithm(function):
         label=dic_traffic_env_conf.get('MODEL',dic_traffic_env_conf['MODEL_NAME'])
         memo=Path(dic_path.get('PATH_TO_WORK_DIRECTORY','records/default')).parent.name
         name=memo if memo not in ('','records','default') else label
-        cfg=TrainingConfig(overrides={'ALGORITHM':label,'RUN_NAME':name,'ENABLE_PPO':False})
+        cfg=TrainingConfig(overrides={'ALGORITHM':label,'RUN_NAME':name},training_mode='original_baseline')
         folder=create_run(cfg)
         paths=dict(dic_path,PATH_TO_MODEL=str(folder/'models/agent'),PATH_TO_WORK_DIRECTORY=str(folder/'records/simulation'),
             PATH_TO_DATA=str((ROOT/dic_path['PATH_TO_DATA']).resolve()),PATH_TO_ERROR=str(folder/'reports/errors'),EXPERIMENT_DIR=str(folder))
@@ -57,7 +57,7 @@ def standalone_paths(agent,environment,paths,algorithm='LLMLight'):
     if paths.get('EXPERIMENT_DIR'):return agent,paths
     name=Path(paths.get('PATH_TO_WORK_DIRECTORY','records/default')).parent.name
     if name in ('','records','default'):name=algorithm
-    cfg=TrainingConfig(overrides={'ALGORITHM':algorithm,'RUN_NAME':name,'ENABLE_PPO':False})
+    cfg=TrainingConfig(overrides={'ALGORITHM':algorithm,'RUN_NAME':name},training_mode='original_baseline')
     folder=create_run(cfg)
     new_paths=dict(paths,EXPERIMENT_DIR=str(folder),PATH_TO_MODEL=str(folder/'models/agent'),
         PATH_TO_WORK_DIRECTORY=str(folder/'records/simulation'),PATH_TO_DATA=str((ROOT/paths['PATH_TO_DATA']).resolve()))

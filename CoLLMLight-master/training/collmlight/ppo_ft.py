@@ -112,14 +112,14 @@ class VLLMLocalGenerator:
             outputs = self.llm.generate(
                 formatted_prompts,
                 self.sampling_params,
-                lora_request=LoRARequest("default", 1, self.current_lora_path)
+                use_tqdm=False, lora_request=LoRARequest("default", 1, self.current_lora_path)
             )
         else:
             # Generate using the base model
-            outputs = self.llm.generate(formatted_prompts, self.sampling_params)
+            outputs = self.llm.generate(formatted_prompts, self.sampling_params, use_tqdm=False)
 
-        if self.cfg and getattr(self,'record_metrics',True):
-            metrics(self.cfg,getattr(self,'metrics_name','ppo_inference'),{'purpose':getattr(self,'purpose','training_rollout'),'module':getattr(self,'module','unknown'),'split':getattr(self,'split','unknown'),'batch_size':len(prompts),'batch_wall_time_s':time.perf_counter()-started,'completion_tokens':[len(out.outputs[0].token_ids) for out in outputs]})
+        self.last_statistics={'batch_wall_time_s':time.perf_counter()-started,
+            'completion_tokens':[len(out.outputs[0].token_ids) for out in outputs]}
         responses = [output.outputs[0].text for output in outputs]
         return responses
 
@@ -190,44 +190,15 @@ def load_models_for_ppo(model_name, max_new_tokens=2048, cfg=None, previous=None
 
     return ppo_model, tokenizer
 
-def generate_offline_data(vllm_generator, dataset):
-    """Generate offline data using VLLM - batched version."""
-    offline_data = []
-
-    print("Generating offline data with VLLM...")
-
-    # Prepare all ATR prompts
-    prompts_atr = [get_atr_user_prompt_wsys(data) for data in dataset]
-
-    # Batch generate all ATR responses
-    print("Generating ATR responses...")
-    vllm_generator.module='SR'
-    responses_atr = vllm_generator.generate_batch(prompts_atr)
-
-    # Prepare all RA prompts
-    prompts_ra = [get_ra_user_prompt_wsys(dataset[i], responses_atr[i]) for i in range(len(dataset))]
-
-    # Batch generate all RA responses
-    print("Generating RA responses...")
-    vllm_generator.module='RD'
-    responses_ra = vllm_generator.generate_batch(prompts_ra)
-
-    # Calculate rewards and save data
-    print("Calculating rewards...")
-    for i, data in enumerate(dataset):
-        reward_ra, used_atr = calculate_reactive_action_reward(responses_ra[i], data['Best_Signal'])
-        reward_atr = calculate_advance_reasoning_reward(responses_atr[i], reward_ra, used_atr)
-
-        offline_data.append({
-            'data': data,
-            'response_atr': responses_atr[i],
-            'response_ra': responses_ra[i],
-            'reward_atr': reward_atr,
-            'reward_ra': reward_ra,
-            'prompt_atr': prompts_atr[i],
-            'prompt_ra': prompts_ra[i]
-        })
-
+def assemble_rollout(dataset,responses_atr,responses_ra):
+    """Published text-format rollout and unchanged reward formulas."""
+    offline_data=[]
+    for data,atr,ra in zip(dataset,responses_atr,responses_ra):
+        reward_ra,used_atr=calculate_reactive_action_reward(ra,data['Best_Signal'])
+        reward_atr=calculate_advance_reasoning_reward(atr,reward_ra,used_atr)
+        offline_data.append({'data':data,'response_atr':atr,'response_ra':ra,
+            'reward_atr':reward_atr,'reward_ra':reward_ra,
+            'prompt_atr':get_atr_user_prompt_wsys(data),'prompt_ra':get_ra_user_prompt_wsys(data,atr)})
     return offline_data
 
 def prepare_ppo_data_from_offline(offline_data, tokenizer, device):
@@ -258,35 +229,27 @@ def evaluate_model(vllm_generator, eval_dataset):
     prompts_atr = [get_atr_user_prompt_wsys(data) for data in eval_dataset]
 
     # Batch generate all ATR responses
-    vllm_generator.module='SR'
     responses_atr = vllm_generator.generate_batch(prompts_atr)
 
     # Prepare all RA prompts
     prompts_ra = [get_ra_user_prompt_wsys(eval_dataset[i], responses_atr[i]) for i in range(len(eval_dataset))]
 
     # Batch generate all RA responses
-    vllm_generator.module='RD'
     responses_ra = vllm_generator.generate_batch(prompts_ra)
 
-    # Calculate all rewards
-    total_reward_ra = 0
-    total_reward_atr = 0
-    examples=[]
+    vllm_generator.evaluation=score_evaluation(eval_dataset,responses_atr,responses_ra)
+    return vllm_generator.evaluation['ra_reward'],vllm_generator.evaluation['atr_reward']
 
-    for i, data in enumerate(eval_dataset):
-        # Calculate reward
-        reward_ra, used_atr = calculate_reactive_action_reward(responses_ra[i], data['Best_Signal'])
-        reward_atr = calculate_advance_reasoning_reward(responses_atr[i], reward_ra, used_atr)
 
-        examples.append({'sample_id':data['sample_id'],'atr':responses_atr[i],'ra':responses_ra[i],'ra_reward':reward_ra,'atr_reward':reward_atr})
-        total_reward_ra += reward_ra
-        total_reward_atr += reward_atr
-
-    avg_ra_reward = total_reward_ra / len(eval_dataset) if eval_dataset else 0
-    avg_atr_reward = total_reward_atr / len(eval_dataset) if eval_dataset else 0
-
-    vllm_generator.evaluation={'ra_reward':avg_ra_reward,'atr_reward':avg_atr_reward,'examples':examples}
-    return avg_ra_reward, avg_atr_reward
+def score_evaluation(records,responses_atr,responses_ra):
+    examples=[];total_ra=total_atr=0.
+    for data,atr,ra in zip(records,responses_atr,responses_ra):
+        reward_ra,used_atr=calculate_reactive_action_reward(ra,data['Best_Signal'])
+        reward_atr=calculate_advance_reasoning_reward(atr,reward_ra,used_atr)
+        examples.append({'sample_id':data['sample_id'],'atr':atr,'ra':ra,'ra_reward':reward_ra,'atr_reward':reward_atr})
+        total_ra+=reward_ra;total_atr+=reward_atr
+    return {'ra_reward':total_ra/len(records) if records else 0.,
+        'atr_reward':total_atr/len(records) if records else 0.,'examples':examples}
 
 def calculate_reactive_action_reward(reactive_action_response: str, best_signal: str) -> tuple[float, int]:
     """Calculate the reward for the reactive action."""
@@ -336,44 +299,64 @@ def split_records(cfg):
     return train,evaluation,{'input':len(source),'selected':len(records),'train':len(train),'eval':len(evaluation),'missing_history':sum(not r.get('Traffic_state_history') for r in source)}
 
 
-def rollout(cfg, epoch, train, evaluation, adapter):
-    folder=cfg.out/'tmp/ppo_rollouts'/f'epoch_{epoch}_{time.time_ns()}'
-    folder.mkdir(parents=True,exist_ok=False)
-    request=folder/'request.json';output=folder/'output.json'
+def training_signature(cfg,train,evaluation):
+    from importlib.metadata import version
+    from training.collmlight.export_best_model import weights_fingerprint,file_hash
+    return digest({'base':weights_fingerprint(cfg.artifact('sft_merged')),
+        'records':{'train':digest(train),'eval':digest(evaluation)},
+        'settings':{k:v for k,v in cfg.values.items() if k.startswith('PPO_') or k in ('RANDOM_SEED','STUDENT_MAX_LENGTH')},
+        'code':{str(p.relative_to(ROOT)):file_hash(p) for p in [Path(__file__),ROOT/'training/collmlight/ppo_trainer.py',
+            ROOT/'training/collmlight/ppo_checkpoint.py',ROOT/'training/collmlight/ppo_rollout.py',ROOT/'utils/prompts.py']},
+        'versions':{k:version(k) for k in ('torch','trl','peft','accelerate','transformers','vllm')}})
+
+
+def rollout_signature(signature,epoch,adapter):
+    from training.collmlight.export_best_model import file_hash
+    return digest({'training_signature':signature,'epoch':epoch,
+        'adapter':file_hash(Path(adapter)/'adapter_model.safetensors') if adapter else None})
+
+
+def rollout(cfg,epoch,signature,updates,adapter,eval_only=False):
+    from training.collmlight.ppo_rollout import RolloutCache
+    cache=RolloutCache(cfg,epoch,rollout_signature(signature,epoch,adapter)).recover()
+    if cache.state['complete']:return cache.output(),cache.folder
+    request=cache.folder/'request.json'
     atomic_json(request,{'run_dir':str(cfg.out),'adapter':str(adapter) if adapter else None,
-        'groups':{'train':train,'eval':evaluation}})
-    log=cfg.out/'logs/train.log'
+        'epoch':epoch,'updates':updates,'signature':signature,'eval_only':eval_only})
     env=dict(os.environ,USE_TF='0',VLLM_USE_V1='0',TOKENIZERS_PARALLELISM='false',VLLM_WORKER_MULTIPROC_METHOD='spawn')
-    result=run_logged_process(cfg,[sys.executable,'-m','training.collmlight.ppo_ft','--rollout-request',str(request),'--output',str(output)],
-        f'PPO vLLM epoch={epoch} workspace={folder.name}',env)
-    if result.returncode:raise RuntimeError(f'vLLM epoch rollout failed: {log}')
-    return read_json(output),folder
-
-def generate_rollout(request_path,output_path):
-    request=read_json(request_path)
-    cfg=TrainingConfig(run_dir=request['run_dir'])
-    generator=VLLMLocalGenerator(str(cfg.artifact('sft_merged')),request['adapter'],cfg['STUDENT_MAX_LENGTH'],cfg)
-    result={'train':[]}
-    if request['groups']['train']:
-        generator.split='train'
-        result['train']=generate_offline_data(generator,request['groups']['train'])
-    generator.split='eval'
-    evaluate_model(generator,request['groups']['eval'])
-    result['evaluation']=generator.evaluation
-    atomic_json(output_path,result)
-    generator.unload_model()
+    result=run_logged_process(cfg,[sys.executable,'-m','training.collmlight.ppo_ft','--rollout-request',str(request)],
+        f'PPO vLLM epoch={epoch} rollout={cache.rollout_id}',env)
+    if result.returncode:raise RuntimeError(f'vLLM epoch rollout failed; generation cache retained: {cache.folder}')
+    return cache.output(),cache.folder
 
 
-def select_best(cfg, epoch, evaluation, updates):
+def generate_rollout(request_path):
+    from training.collmlight.ppo_rollout import generate_epoch
+    request=read_json(request_path);cfg=TrainingConfig(run_dir=request['run_dir'])
+    train,evaluation,_=split_records(cfg)
+    actual=training_signature(cfg,train,evaluation)
+    if actual!=request['signature']:raise ValueError('Rollout request model/data/code signature mismatch')
+    if request['eval_only']:train=[]
+    signature=rollout_signature(actual,request['epoch'],request['adapter'])
+    generate_epoch(cfg,request['epoch'],signature,train,evaluation,request['adapter'],request['updates'])
+
+
+def select_best(cfg, epoch, evaluation, updates, rollout_id):
     from training.collmlight.export_best_model import file_hash
     checkpoint=cfg.artifact('ppo_checkpoints')/f'epoch_{epoch}'
     score=evaluation['ra_reward']
-    metrics(cfg,'ppo_eval',{'epoch':epoch,'updates':updates,'checkpoint':str(checkpoint),'metric':'ra_reward','score':score,'atr_reward':evaluation['atr_reward']})
+    metrics(cfg,'ppo_eval',{'epoch':epoch,'global_update':updates,'rollout_id':rollout_id,'updates':updates,'checkpoint':str(checkpoint),'metric':'ra_reward','score':score,'atr_reward':evaluation['atr_reward']})
     print(f'[PPO validation] epoch={epoch} RA reward={score:.4f} ATR reward={evaluation["atr_reward"]:.4f}',flush=True)
     atomic_json(checkpoint/'evaluation.json',{'ra_reward':evaluation['ra_reward'],'atr_reward':evaluation['atr_reward'],
         'sample_count':len(evaluation['examples'])})
     best=cfg.artifact('ppo_best')
-    if best.exists() and score<=read_json(best/'best_model.json')['score']:return
+    old=best.with_name('.ppo_best_old')
+    if old.exists():
+        if best.exists():shutil.rmtree(old)
+        else:old.rename(best)
+    if best.exists() and score<=read_json(best/'best_model.json')['score']:
+        metrics(cfg,'selection',{'stage':'ppo','event':'retained_best','global_update':updates,'rollout_id':rollout_id,**read_json(best/'best_model.json')})
+        return
     meta={'checkpoint':str(checkpoint.relative_to(cfg.out)),'epoch':epoch,'update':updates,'score':score,
         'metric':'ra_reward','base_model':str(cfg.artifact('sft_merged')),'adapter_sha256':file_hash(checkpoint/'adapter_model.safetensors')}
     atomic_json(checkpoint/'best_model.json',meta)
@@ -383,7 +366,7 @@ def select_best(cfg, epoch, evaluation, updates):
     if best.exists():best.rename(old)
     temporary.rename(best)
     if old.exists():shutil.rmtree(old)
-    metrics(cfg,'selection',{'stage':'ppo','event':'new_best',**meta})
+    metrics(cfg,'selection',{'stage':'ppo','event':'new_best','global_update':updates,'rollout_id':rollout_id,**meta})
     print(f'[PPO best] epoch={epoch} RA reward={score:.4f}',flush=True)
 
 def build_trainer(cfg,previous=None):
@@ -399,80 +382,131 @@ def build_trainer(cfg,previous=None):
 @exclusive_stage
 def run(cfg):
     import torch
+    from safetensors.torch import save_file,load_file
     from utils.training_models import seed_all,versions,trainable_snapshot,weight_change,frozen_fingerprint
+    from training.collmlight.ppo_checkpoint import PPOCheckpoint,MetricJournal,durable_json
+    from training.collmlight.ppo_rollout import RolloutCache
+    from training.collmlight.export_best_model import file_hash
     per_batch=validate_batch(cfg);train,evaluation,counts=split_records(cfg)
     seed_all(cfg['RANDOM_SEED']);versions(cfg)
+    signature=training_signature(cfg,train,evaluation)
+    recovery=PPOCheckpoint(cfg,signature);journal=recovery.journal
+    start_file=cfg.out/'checkpoints/ppo_start.json'
+    if start_file.exists():
+        start=read_json(start_file)
+        if start['signature']!=signature:raise ValueError('PPO model/data/configuration/code changed since this run started')
+    else:
+        start={'signature':signature,'metric_offsets':journal.snapshot()};durable_json(start_file,start)
+    checkpoints=cfg.artifact('ppo_checkpoints');checkpoints.mkdir(parents=True,exist_ok=True)
     sft_split=read_json(cfg.data_dir/'sft_data/split_manifest.json') if (cfg.data_dir/'sft_data/split_manifest.json').exists() else {}
     selected_ids={r['sample_id'] for r in train+evaluation}
     counts['sft_train_overlap']=len(selected_ids & set(sft_split.get('train',[])))
     counts['sft_eval_overlap']=len(selected_ids & set(sft_split.get('eval',[])))
-    atomic_json(cfg.data_dir/'ppo_split.json',{'counts':counts,'train':[r['sample_id'] for r in train],'eval':[r['sample_id'] for r in evaluation],
-        'source':str(cfg.path('TRAFFIC_SAMPLE_PATH')),'source_sha256':digest(read_json(cfg.path('TRAFFIC_SAMPLE_PATH')))})
-    checkpoints=cfg.artifact('ppo_checkpoints');checkpoints.mkdir(parents=True,exist_ok=True)
-    updates=0
+    atomic_json(cfg.data_dir/'ppo_split.json',{'counts':counts,'train':[r['sample_id'] for r in train],
+        'eval':[r['sample_id'] for r in evaluation],'source':str(cfg.path('TRAFFIC_SAMPLE_PATH')),
+        'source_sha256':digest(read_json(cfg.path('TRAFFIC_SAMPLE_PATH')))})
+    updates=0;boundary=start['metric_offsets']
     for epoch in range(1,cfg['PPO_NUM_EPOCHS']+1):
         print(f'\n[PPO] epoch {epoch}/{cfg["PPO_NUM_EPOCHS"]}; cumulative updates={updates}',flush=True)
         target=checkpoints/f'epoch_{epoch}'
         if (target/'complete.json').exists():
-            updates=read_json(target/'progress.json')['updates']
+            progress=read_json(target/'progress.json');updates=progress['updates'];boundary=progress['metric_offsets']
+            recovery.finish_epoch(epoch)
+            abandoned=cfg.out/'tmp/ppo_rollouts'/f'epoch_{epoch}'
+            if abandoned.exists():clean_workspace(cfg.out,abandoned)
             print(f'[PPO] epoch {epoch} already saved; skipping',flush=True)
             continue
-        if target.exists():raise FileExistsError(f'Incomplete checkpoint must be inspected, not overwritten: {target}')
+        if target.exists():raise FileExistsError(f'Incomplete epoch checkpoint: {target}')
         previous=checkpoints/f'epoch_{epoch-1}' if epoch>1 else None
-        generated,workspace=rollout(cfg,epoch,train,evaluation,previous)
-        score=generated['evaluation']
-        if previous:select_best(cfg,epoch-1,score,updates)
-        else:metrics(cfg,'ppo_eval',{'epoch':0,'stage':'initial_sft_reference','ra_reward':score['ra_reward']})
+        cache=RolloutCache(cfg,epoch,rollout_signature(signature,epoch,previous))
+        saved_path,saved=recovery.latest(epoch)
+        if saved:
+            if saved['rollout_id']!=cache.rollout_id:raise ValueError('PPO checkpoint uses a different rollout')
+            generated=cache.output();workspace=cache.folder
+            journal.rollback(saved['metric_offsets'])
+        else:
+            if not cache.progress_path.exists():journal.rollback(boundary)
+            generated,workspace=rollout(cfg,epoch,signature,updates,previous)
+            if previous:select_best(cfg,epoch-1,generated['evaluation'],updates,cache.rollout_id)
+            else:metrics(cfg,'ppo_eval',{'epoch':0,'global_update':updates,'rollout_id':cache.rollout_id,
+                'stage':'initial_sft_reference','ra_reward':generated['evaluation']['ra_reward']})
         trainer,tokenizer=build_trainer(cfg,previous)
-        before=trainable_snapshot(trainer.model)
-        frozen_before=frozen_fingerprint(trainer.model)
-        trainable=[n for n,p in trainer.model.named_parameters() if p.requires_grad]
-        if not all(('lora_' in n or 'v_head' in n) for n in trainable):raise RuntimeError('Unexpected trainable base parameters')
+        if saved:
+            recovery.load(trainer,saved_path);updates=saved['updates'];next_record=saved['next_record']
+            if file_hash(workspace/'initial_trainable.safetensors')!=saved['initial_trainable_sha256']:
+                raise ValueError('PPO initial-epoch adapter reference was modified')
+            before=load_file(str(workspace/'initial_trainable.safetensors'))
+            frozen_before=saved['frozen_before']
+            if frozen_fingerprint(trainer.model)!=frozen_before:raise ValueError('PPO frozen base differs at resume')
+        else:
+            before=trainable_snapshot(trainer.model);frozen_before=frozen_fingerprint(trainer.model);next_record=0
+            save_file(before,str(workspace/'initial_trainable.safetensors'))
         rows=generated['train'];usable=len(rows)//per_batch*per_batch
-        metrics(cfg,'ppo_epoch',{'epoch':epoch,'traffic_records':len(rows),'used_records':usable,'dropped_tail':len(rows)-usable,
-            'backend':'vllm','quantization_bits':cfg['PPO_QUANTIZATION_BITS'],'whiten_rewards':cfg['PPO_WHITEN_REWARDS'],'trainable_tensor_count':len(trainable),
-            'optimizer_lifecycle':'reinitialized_each_epoch','value_head_lifecycle':'reinitialized_each_epoch'})
-        progress=tqdm(range(0,usable,per_batch),desc=f'PPO Training epoch {epoch}/{cfg["PPO_NUM_EPOCHS"]}',unit='update',dynamic_ncols=True)
-        for start in progress:
-            queries,responses,rewards=prepare_ppo_data_from_offline(rows[start:start+per_batch],tokenizer,trainer.accelerator.device)
+        if next_record<0 or next_record>usable or next_record%per_batch:raise ValueError('Invalid PPO resume data offset')
+        extra={'frozen_before':frozen_before,'initial_trainable_sha256':file_hash(workspace/'initial_trainable.safetensors')}
+        if not saved:
+            trainable=[n for n,p in trainer.model.named_parameters() if p.requires_grad]
+            if not all('lora_' in n or 'v_head' in n for n in trainable):raise RuntimeError('Unexpected trainable base parameters')
+            metrics(cfg,'ppo_epoch',{'epoch':epoch,'global_update':updates,'rollout_id':cache.rollout_id,
+                'traffic_records':len(rows),'used_records':usable,'dropped_tail':len(rows)-usable,
+                'backend':'vllm','quantization_bits':cfg['PPO_QUANTIZATION_BITS'],'whiten_rewards':cfg['PPO_WHITEN_REWARDS'],
+                'trainable_tensor_count':len(trainable),'optimizer_lifecycle':'reinitialized_each_epoch',
+                'value_head_lifecycle':'reinitialized_each_epoch'})
+            recovery.save(trainer,epoch,updates,0,cache.rollout_id,extra)
+        progress=tqdm(range(next_record,usable,per_batch),initial=next_record//per_batch,total=usable//per_batch,
+            desc=f'PPO Training epoch {epoch}/{cfg["PPO_NUM_EPOCHS"]}',unit='update',dynamic_ncols=True)
+        for record_start in progress:
+            batch=rows[record_start:record_start+per_batch]
+            queries,responses,rewards=prepare_ppo_data_from_offline(batch,tokenizer,trainer.accelerator.device)
             if len(queries)!=cfg['PPO_BATCH_SIZE']:raise RuntimeError('Actual query batch mismatch')
             stats=trainer.step(queries,responses,rewards);updates+=1
             for key in ['ppo/loss/policy','ppo/loss/value','objective/kl']:
                 if key in stats and not __import__('numpy').isfinite(stats[key]).all():raise RuntimeError(f'Non-finite {key}')
-            metrics(cfg,'ppo_train',{'epoch':epoch,'global_update':updates,'query_count':len(queries),
-                'atr_reward':sum(r['reward_atr'] for r in rows[start:start+per_batch])/per_batch,
-                'ra_reward':sum(r['reward_ra'] for r in rows[start:start+per_batch])/per_batch,
+            metrics(cfg,'ppo_train',{'epoch':epoch,'global_update':updates,'rollout_id':cache.rollout_id,
+                'record_start':record_start,'query_count':len(queries),
+                'atr_reward':sum(r['reward_atr'] for r in batch)/per_batch,'ra_reward':sum(r['reward_ra'] for r in batch)/per_batch,
                 'statistics':{key:float(value) for key,value in stats.items() if __import__('numpy').ndim(value)==0}})
-            progress.set_postfix(update=updates,ra_reward=f'{sum(r["reward_ra"] for r in rows[start:start+per_batch])/per_batch:.3f}',
-                atr_reward=f'{sum(r["reward_atr"] for r in rows[start:start+per_batch])/per_batch:.3f}',
-                policy_loss=f'{float(stats.get("ppo/loss/policy",float("nan"))):.4f}',
-                value_loss=f'{float(stats.get("ppo/loss/value",float("nan"))):.4f}',
-                kl=f'{float(stats.get("objective/kl",float("nan"))):.4f}')
+            progress.set_postfix(update=updates,policy_loss=f'{float(stats.get("ppo/loss/policy",float("nan"))):.4f}',
+                value_loss=f'{float(stats.get("ppo/loss/value",float("nan"))):.4f}',kl=f'{float(stats.get("objective/kl",float("nan"))):.4f}',
+                atr_reward=f'{sum(r["reward_atr"] for r in batch)/per_batch:.3f}',
+                ra_reward=f'{sum(r["reward_ra"] for r in batch)/per_batch:.3f}')
+            following=record_start+per_batch
+            if following==usable or following//per_batch%cfg['PPO_SAVE_STEPS']==0:
+                recovery.save(trainer,epoch,updates,following,cache.rollout_id,extra)
         changed=weight_change(trainer.model,before)
         frozen_after=frozen_fingerprint(trainer.model)
-        if frozen_before!=frozen_after:raise RuntimeError("Frozen base weights changed")
+        if frozen_before!=frozen_after:raise RuntimeError('Frozen base weights changed')
         temporary=checkpoints/f'.epoch_{epoch}_tmp'
         if temporary.exists():shutil.rmtree(temporary)
         temporary.mkdir();trainer.save_pretrained(str(temporary));tokenizer.save_pretrained(temporary)
-        atomic_json(temporary/'progress.json',{'epoch':epoch,'updates':updates,'changed_trainable_tensors':len(changed),'changed_lora_tensors':sum('lora_' in n for n in changed),'changed_value_head_tensors':sum('v_head' in n for n in changed),'frozen_base_unchanged':frozen_before==frozen_after,'frozen_weights_sha256':frozen_after})
-        atomic_json(temporary/'complete.json',{'epoch':epoch});temporary.rename(target)
+        progress={'epoch':epoch,'updates':updates,'metric_offsets':journal.snapshot(),
+            'changed_trainable_tensors':len(changed),'changed_lora_tensors':sum('lora_' in n for n in changed),
+            'changed_value_head_tensors':sum('v_head' in n for n in changed),'frozen_base_unchanged':True,
+            'frozen_weights_sha256':frozen_after,'rollout_id':cache.rollout_id}
+        for path in temporary.iterdir():
+            if path.is_file():
+                with path.open('rb') as stream:os.fsync(stream.fileno())
+        durable_json(temporary/'progress.json',progress);durable_json(temporary/'complete.json',{'epoch':epoch})
+        temporary.rename(target);boundary=progress['metric_offsets']
         print(f'[PPO checkpoint] saved epoch={epoch}, updates={updates}: {target}',flush=True)
-        clean_workspace(cfg.out,workspace)
-        del trainer,tokenizer,before,queries,responses,rewards;gc.collect();torch.cuda.empty_cache()
-    final=checkpoints/f"epoch_{cfg['PPO_NUM_EPOCHS']}"
-    generated,workspace=rollout(cfg,'final',[],evaluation,final)
-    select_best(cfg,cfg['PPO_NUM_EPOCHS'],generated['evaluation'],updates)
+        recovery.finish_epoch(epoch);clean_workspace(cfg.out,workspace)
+        del trainer,tokenizer,before;gc.collect();torch.cuda.empty_cache()
+    final=checkpoints/f'epoch_{cfg["PPO_NUM_EPOCHS"]}'
+    final_cache=RolloutCache(cfg,'final',rollout_signature(signature,'final',final))
+    if not final_cache.progress_path.exists():journal.rollback(boundary)
+    generated,workspace=rollout(cfg,'final',signature,updates,final,eval_only=True)
+    select_best(cfg,cfg['PPO_NUM_EPOCHS'],generated['evaluation'],updates,final_cache.rollout_id)
     best=read_json(cfg.artifact('ppo_best')/'best_model.json')
     stage_summary(cfg,'ppo',{'epochs':cfg['PPO_NUM_EPOCHS'],'updates':updates,'backend':'vllm',
         'best_model':'models/ppo_best','best_checkpoint':best['checkpoint'],'best_score':best['score'],
-        'counts':counts,'save_strategy':'epoch'})
+        'counts':counts,'save_strategy':'epoch','resume_strategy':'complete_update_state'})
     clean_workspace(cfg.out,workspace)
 
 
 def evaluate_full_model(cfg,model_path,output_path):
     """Integrity inference through the same published PPO evaluation protocol."""
     from utils.training_rewards import parse_action
-    if cfg['ENABLE_PPO']:
+    if cfg.selection_stage=='ppo':
         records=split_records(cfg)[1]
     else:
         ids=read_json(cfg.data_dir/'sft_data/split_manifest.json')['eval']
@@ -481,7 +515,6 @@ def evaluate_full_model(cfg,model_path,output_path):
     # One held-out record is sufficient for integrity; full selection already ran.
     records=records[:1]
     generator=VLLMLocalGenerator(str(model_path),max_model_len=cfg['STUDENT_MAX_LENGTH'],cfg=cfg)
-    generator.record_metrics=False
     try:
         evaluate_model(generator,records)
         for row in generator.evaluation['examples']:
@@ -502,6 +535,6 @@ if __name__=='__main__':
     parser.add_argument('--output')
     parser.add_argument('--evaluate-model')
     args=parser.parse_args()
-    if args.rollout_request:generate_rollout(args.rollout_request,args.output)
+    if args.rollout_request:generate_rollout(args.rollout_request)
     elif args.evaluate_model:evaluate_full_model(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir),args.evaluate_model,args.output)
     else:run(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir))

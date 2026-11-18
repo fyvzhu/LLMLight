@@ -3,12 +3,10 @@ output_root: ./outputs
 
 training:
   random_seed: 42
-  enable_ppo: true
   data_preparation: reuse # sample_and_generate / generate_teacher / reuse
-  sft_source_run: null
 
 inputs:
-  traffic_samples: /root/autodl-tmp/CoLLMLight-master/outputs/CoLLMLight/CoLLMLight_20261116_133927_747223/data/traffic_samples/SynTrain_sample_all.json # generate_teacher 必填；reuse 且启用 PPO 时必填
+  traffic_samples: /root/autodl-tmp/CoLLMLight-master/outputs/CoLLMLight/CoLLMLight_20261116_133927_747223/data/traffic_samples/SynTrain_sample_all.json # generate_teacher、reuse 整流程及仅 PPO 入口必填
   teacher_data: /root/autodl-tmp/CoLLMLight-master/outputs/CoLLMLight/CoLLMLight_20261116_133927_747223/data/teacher_data/syn_rt_data.json    # reuse 必填；其余模式忽略
 
 sampling:
@@ -71,6 +69,9 @@ ppo:
   top_p: 0.95
   whiten_rewards: true
   gpu_memory_utilization: 0.9
+  rollout_batch_size: 16 # 每个生成小批完成后提交缓存；中断只重做未提交的小批
+  save_steps: 5         # 每5次完整 trainer.step 保存轮内训练状态
+  save_total_limit: 2   # 仅轮换保留最近2份完整轮内断点；epoch Adapter 仍按原规则保存
 
 export:
   source: auto

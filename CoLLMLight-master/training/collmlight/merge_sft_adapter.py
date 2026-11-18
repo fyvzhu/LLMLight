@@ -18,21 +18,24 @@ def merge(cfg):
     path = cfg.artifact('sft_merged')
     if (path / 'config.json').exists():
         raise FileExistsError('Merged model already exists; use a new RUN_NAME to avoid stale weights')
-    if cfg.run_dir and cfg['SFT_SOURCE_RUN']:
+    if cfg.sft_source:
         import shutil
-        import os
         from utils.training_config import read_json
-        from training.collmlight.export_best_model import file_hash,weights_fingerprint
-        source=cfg.path('SFT_SOURCE_RUN')/'models/trained_best_model'
-        manifest=read_json(source/'model_manifest.json')
-        if manifest['selected_stage']=='sft' and manifest['source_adapter_sha256']==file_hash(cfg.artifact('sft_adapter')/'adapter_model.safetensors'):
-            if weights_fingerprint(source)!=manifest['exported_weights']:raise ValueError('Source full SFT weights changed')
-            def clone(a,b):
-                if str(a).endswith(('.safetensors','.bin')):return os.link(a,b)
-                return shutil.copy2(a,b)
-            shutil.copytree(source,path,copy_function=clone)
+        from utils.experiment import link_model_file
+        from training.collmlight.export_best_model import file_hash, weights_fingerprint
+        best_hash=file_hash(cfg.artifact('sft_adapter')/'adapter_model.safetensors')
+        state=read_json(cfg.sft_source/'manifest.json')
+        source=cfg.sft_source/'models/sft_merged'
+        reusable=(source/'config.json').is_file() and state.get('stages',{}).get('merge',{}).get('state')=='completed'
+        if not reusable:
+            source=cfg.sft_source/'models/trained_best_model'
+            meta=read_json(source/'model_manifest.json') if (source/'model_manifest.json').exists() else {}
+            reusable=meta.get('selected_stage')=='sft' and meta.get('source_adapter_sha256')==best_hash
+            if reusable and weights_fingerprint(source)!=meta['exported_weights']:raise ValueError('Source full SFT weights changed')
+        if reusable:
+            shutil.copytree(source,path,copy_function=link_model_file)
             stage_summary(cfg,'merge',{'merged_model':str(path),'reused_sft_full_model':str(source),
-                'storage':'immutable weight hardlinks; each model directory remains independently loadable'})
+                'source_adapter_sha256':best_hash,'weights':weights_fingerprint(path),'storage':'immutable weight hardlinks'})
             print('Verified SFT full weights reused:',path)
             return
     tokenizer = tokenizer_for(cfg.artifact('sft_adapter'))

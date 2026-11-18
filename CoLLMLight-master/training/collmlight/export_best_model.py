@@ -3,7 +3,7 @@ if __package__ in (None, ""):
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-"""Export the validation-selected PPO adapter as an independently loadable full model."""
+"""Export the validation-selected SFT or PPO adapter as a standalone full model."""
 import gc
 import os
 import sys
@@ -34,15 +34,12 @@ def weights_fingerprint(path):
 
 def best_source(cfg):
     if not cfg.run_dir:raise ValueError('Choose a training run with --run-dir')
-    stage='ppo' if cfg['ENABLE_PPO'] else 'sft'
+    stage=cfg.selection_stage
     source=cfg.artifact(stage+'_best')
     meta=read_json(source/'best_model.json')
     checkpoint=(cfg.out/meta['checkpoint']).resolve()
     if stage=='ppo' and not checkpoint.is_relative_to(cfg.artifact('ppo_checkpoints').resolve()):
         raise ValueError('Best checkpoint escapes this experiment')
-    # Reused SFT best has its original checkpoint recorded; source weights are copied and hash-checked.
-    if stage=='sft' and cfg['SFT_SOURCE_RUN']:
-        checkpoint=cfg.path('SFT_SOURCE_RUN')/meta['checkpoint']
     if not checkpoint.is_file() and not checkpoint.is_dir():raise FileNotFoundError(checkpoint)
     if file_hash(source/'adapter_model.safetensors')!=meta['adapter_sha256']:
         raise ValueError('Selected best adapter hash mismatch')
@@ -67,7 +64,7 @@ def export_best(cfg):
     from utils.inference_models import TransformersModel,require_full_model
     from utils.training_models import tokenizer_for
     source,meta,selection=best_source(cfg)
-    stage='ppo' if cfg['ENABLE_PPO'] else 'sft'
+    stage=cfg.selection_stage
     base=cfg.artifact('sft_merged') if stage=='ppo' else cfg.path('STUDENT_MODEL_PATH')
     target=cfg.export_dir
     signature=digest({'base':weights_fingerprint(base),'adapter':meta['adapter_sha256'],'stage':stage,'dtype':cfg['EXPORT_DTYPE'],'integrity_protocol':'official_ppo_eval_v1'})

@@ -14,17 +14,22 @@
 output_root: ./outputs
 training:
   random_seed: 42
-  enable_ppo: true
   data_preparation: sample_and_generate
 ```
 
 当前主配置采用完整4×4仿真采样（120个30秒决策步）、最多1000条合格教师记录、SFT完整1个epoch、PPO完整100个epoch。采样断点默认每5个完整决策步保存一次。小规模检查可直接调整同一YAML中的数据和训练上限，不需要另一套配置。
 
-## 两个入口
+## 三个训练入口与独立评测
 
 ```bash
 # 完整训练；默认读取config/config.yaml
 .venv/bin/python training/collmlight/train_collmlight.py
+
+# 仅 SFT，包含验证、最佳 Adapter 与完整模型导出
+.venv/bin/python training/collmlight/train_sft.py
+
+# 仅 PPO，明确指定 SFT 来源；来源只需 SFT 阶段完成
+.venv/bin/python training/collmlight/train_ppo.py --sft-run /绝对路径/SFT运行目录
 
 # 仅评测，不自动训练；加载本次训练导出的完整最佳模型
 .venv/bin/python run_CoLLMlight.py --run-dir outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
@@ -43,7 +48,7 @@ VLLM_USE_V1=0 .venv/bin/python -m vllm.entrypoints.openai.api_server \
 
 入口会检查服务实际提供的模型身份，避免误测其他权重。Transformers仅用于完整模型独立加载与logits检查。论文延迟实验应固定服务后端、硬件、生成参数及批量，排除预热；不能与此前Transformers本地推理计时混合。`my_tests/benchmark_inference.py`现在也调用同一服务，记录的是整批API请求往返耗时，不代表纯GPU算子耗时。
 
-`training.enable_ppo: false` 只执行SFT并导出其验证最佳模型；true执行SFT→合并SFT最佳→PPO→导出PPO验证最佳。SFT用最小验证loss，PPO用最大验证RA reward，平分保留较早者；CityFlow测试不参与选模。
+三个入口共用 `pipeline.py`；由入口决定阶段，配置中不再保留训练阶段开关或 SFT 来源字段。`train_ppo.py` 使用 `--sft-run` 指定来源，新建独立运行目录；来源可以是 SFT 完成但 PPO 失败的整流程目录。SFT用最小验证loss，PPO用最大验证RA reward，平分保留较早者；CityFlow测试不参与选模。
 
 ## SFT标准Checkpoint与断点续训
 
@@ -68,11 +73,43 @@ sft:
   --resume-run outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
 ```
 
-保持与该运行相同的训练配置。总入口跳过已完成阶段，SFT从同次运行最近的完整标准checkpoint恢复模型、优化器、调度器、随机数及数据进度，日志按新的attempt追加。没有checkpoint且SFT尚未开始更新时从头启动；非空旧Adapter目录、缺少状态文件或数据/配置/版本不一致时明确失败，不静默改成权重续训，不维护旧格式兼容。旧Adapter不能补回以前未保存的优化器与随机数状态。
+保持与该运行相同的训练配置，并使用最初创建该运行的同一个入口。整流程使用上例；仅 SFT 将文件名改为 `train_sft.py`，仅 PPO 改为 `train_ppo.py`，恢复时不再传 `--sft-run`。入口跳过已完成阶段，SFT从同次运行最近的完整标准checkpoint恢复模型、优化器、调度器、随机数及数据进度，日志按新的attempt追加。没有checkpoint且SFT尚未开始更新时从头启动；非空旧Adapter目录、缺少状态文件或数据/配置/版本不一致时明确失败，不静默改成权重续训，不维护旧格式兼容。旧Adapter不能补回以前未保存的优化器与随机数状态。
 
 checkpoint中已完成全部计划更新、但外层阶段尚未写完成报告时，只整理最佳归档和报告，不多执行一次更新。`manifest.json`的`stages.sft.summary`区分累计updates、此次new_updates和恢复起点resumed_step；最佳权重变化统计也明确其参照。中断后最多回退到最近一次完整保存，不恢复尚未保存的梯度或更新。同环境续训一致性需实测，不承诺任意硬件/版本间逐位一致。
 
-本轮真实模型及恢复状态的详细验收见`my_tests/SFT断点续训测试结果.md`。Trainer返回的train_loss属于本次调用的汇总，跨中断的完整学习曲线应读取按step记录的`sft_train.jsonl`，不能直接比较不同调用的汇总loss。
+Trainer返回的train_loss属于本次调用的汇总，跨中断的完整学习曲线应读取按step记录的`sft_train.jsonl`，不能直接比较不同调用的汇总loss。
+
+## PPO 生成与轮内断点恢复
+
+```yaml
+ppo:
+  rollout_batch_size: 16
+  save_steps: 5
+  save_total_limit: 2
+```
+
+这些字段已经位于唯一主配置中。生成每完成一个小批就提交文本结果、实际token统计、模型/数据/参数身份及进度；例如ATR已全部保存、RA已保存400条，恢复时不会重做ATR或这400条RA。尚未提交的小批需重做，不恢复GPU内部生成到一半的token或KV cache。
+
+当前轮缓存位于 `tmp/ppo_rollouts/epoch_N/`，四个阶段为 train_atr、train_ra、eval_atr、eval_ra。缓存只用于当前轮恢复，不永久保存全部历史rollout。不同模型、数据、代码或生成参数不能复用同一缓存。
+
+在完整 `trainer.step()` 返回后，按 `ppo.save_steps` 保存轮内状态，第一步前和最后一个完整更新也保存。原生Accelerate状态包含优化器、存在时的调度器、随机数及梯度累积计数；保存钩子仅写LoRA与价值头，另记录PPO控制器/统计、epoch、下一条交通记录位置和rollout身份，不重复保存冻结基础权重。断点位于 `checkpoints/ppo_resume/epoch_N_update_U/`，成功提交新断点后才轮换，默认保留最近2份。
+
+恢复命令始终指定原运行目录，并使用相同入口：
+
+```bash
+# 整流程运行恢复
+.venv/bin/python training/collmlight/train_collmlight.py --resume-run /绝对路径/原运行目录
+# PPO-only 运行恢复
+.venv/bin/python training/collmlight/train_ppo.py --resume-run /绝对路径/原PPO运行目录
+```
+
+已完成的epoch跳过；未完成epoch从最近成功保存的完整更新边界继续，复用同轮rollout。未保存的更新需重做。轮内恢复优化器和价值头，不改变官方跨epoch重新初始化优化器/价值头的行为；完整epoch的Adapter仍保存到 `models/ppo_checkpoints/epoch_N/`。
+
+结构化PPO指标记录run、attempt、epoch、global_update及rollout身份。断点同时提交指标字节位置；恢复时回滚未被模型断点采用的指标尾部，而不是只保留最后一次attempt。已完成epoch和SFT指标保留，`logs/train.log`继续保存分attempt的原始历史。不要将控制台进度条当作正式实验指标源。
+
+旧目录的SFT成果仍可通过 `train_ppo.py --sft-run <旧目录>` 复用，包括SFT成功但PPO失败的目录。旧版本未保存的生成结果、优化器和RNG不能事后补回；本次不修改历史目录配置、不提供旧开关或旧断点格式兼容。配置schema改变的历史运行请作为SFT来源创建新的PPO运行，而不是在历史目录强行切换配置。
+
+保留的测试入口与验收结论见 [测试说明](my_tests/README.md)。默认 BF16/SDPA 更新不保证逐位确定；状态恢复与确定性算子下的对照已分别验证。历史测试模型和日志已经清理。
 
 ## 数据准备模式和输入
 
@@ -80,7 +117,8 @@ checkpoint中已完成全部计划更新、但外层阶段尚未写完成报告�
 | --- | --- | --- |
 | sample_and_generate | 忽略，自动采样 | 忽略，自动生成 |
 | generate_teacher | 必填 | 忽略，自动生成 |
-| reuse，启用PPO | 必填，作为PPO场景输入 | 必填 |
+| reuse，整流程 | 必填，作为PPO场景输入 | 必填 |
+| 仅PPO入口 | 必填 | 不使用；SFT来源由 --sft-run 指定 |
 | reuse，仅SFT | 忽略 | 必填 |
 
 未启用的输入可设null，不需要额外enable开关。输入数据不会被覆盖。可复用输入分目录存放：
@@ -118,7 +156,7 @@ data/FinetuneData/
 
 例如第7步试验途中中断，最近断点是完成第5步，恢复后从第6步继续；未保存的第6步需要重做。恢复时JSON和仿真日志回退到断点对应状态，终端诊断日志继续追加，保留中断记录。断点内Python状态只允许加载自己生成、可信且未被他人修改的本地文件。
 
-断点机制不缩短采样本身的计算时间，也不保证恢复尚未保存的进度。仍建议在tmux中运行。验收使用真实CityFlow进行不同进程的连续/中断恢复对照，详见`my_tests/采样断点恢复测试结果.md`。
+断点机制不缩短采样本身的计算时间，也不保证恢复尚未保存的进度。仍建议在tmux中运行。此前已使用真实CityFlow进行不同进程的连续/中断恢复对照；当前保留`my_tests/test_sampling_checkpoint.py`进行断点提交与恢复边界回归检查。
 
 ## 输出
 
@@ -146,6 +184,7 @@ outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒/
 │   ├── events.jsonl             # 阶段状态转换和耗时
 │   └── teacher_requests.jsonl   # 教师请求、用量和失败信息
 ├── metrics/                    # SFT/PPO逐步训练、验证、选优及生成统计
+├── checkpoints/ppo_resume/     # 当前轮最近完整更新状态；成功提交epoch后清理
 ├── checkpoints/sampling/latest.ckpt # 采样期间唯一恢复点，成功提交后清理
 ├── records/sampling/            # 采样车辆原始CSV等
 └── evaluations/数据集_年月日_时分秒_微秒/
@@ -163,11 +202,11 @@ outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒/
 
 仅产生实际执行阶段所需文件。名称固定使用算法名和微秒时间戳；不设置额外实验前缀。训练不覆盖旧运行，同一模型多路网/多种子评测在同一运行的evaluations下创建不同目录。通过显式模型路径独立启动评测时会新建运行目录；通过`--run-dir`评测时不会再创建第二个训练目录。
 
-不再生成reports目录、各阶段code_before/after副本、重复导出报告、integration_report、metrics.json、legacy_results、history_data整包转存、自动图表、未使用的dataset_info和env_rl_data。PPO指标只写标量统计，不保存token级训练数组；rollout的完整token IDs仍直接用于原TRL更新，成功提交epoch checkpoint后清理临时副本。失败时保留`tmp/`排错。仿真输入副本、导出过程文件也遵循成功后清理、失败保留，不删除正式模型或原始输入。
+不再生成reports目录、各阶段code_before/after副本、重复导出报告、integration_report、metrics.json、legacy_results、history_data整包转存、自动图表、未使用的dataset_info和env_rl_data。PPO指标只写标量统计，不保存token级训练数组；rollout文本按官方方式重新编码，query 最长8192、response 最长2048，分别截断；成功提交epoch checkpoint后清理当前轮生成缓存和轮内断点。失败时保留`tmp/`排错。仿真输入副本、导出过程文件也遵循成功后清理、失败保留，不删除正式模型或原始输入。
 
 模型内config、Tokenizer、Adapter配置和原生checkpoint的optimizer、scheduler、RNG、trainer_state必须保留，它们属于模型格式或续训状态。PPO最佳与epoch权重使用同文件系统硬链接节约空间；可变进度与验证元数据独立复制。不要原地编辑这些模型文件；复制最佳Adapter用于外部修改时使用普通复制。
 
-PPO训练使用发布版VLLMLocalGenerator、generate_offline_data、prepare_ppo_data_from_offline、evaluate_model和模型/奖励函数；vLLM生成仍先ATR后RA，保留原聊天模板。实际rollout token直接用于TRL，batch_size以query计数（每条交通记录两项）。上一轮LoRA只加载一次并保持可训练；验证分数关联真正被评估的checkpoint，最终轮也验证。vLLM阶段用同一个ppo_ft.py子进程执行，释放CUDA后再训练，没有另一份rollout算法。
+PPO使用发布版提示词、生成、奖励与验证协议；生成结果组装和缓存共用一套实现，仍按整轮先ATR后RA、完成生成后再更新，保留原聊天模板。query和response按官方规则分别重新编码及截断，不保留生成token IDs训练路径；batch_size以query计数（每条交通记录两项）。正式更新保留kbit准备函数，修正实际前向模式并使用BF16 autocast。上一轮LoRA只加载一次并保持可训练；验证分数关联真正被评估的checkpoint，最终轮也验证。vLLM阶段用同一个ppo_ft.py子进程执行，释放CUDA后再训练，没有另一份rollout算法。
 
 SFT转换、PPO奖励和CityFlow共用`utils/training_rewards.py`的RA解析规则：signal必须属于四种合法信号；used_atr若提供，必须是JSON整数0或1，缺失时保留官方默认0；reason可缺省。非法输出在PPO中得到原错误奖励-1，在CityFlow中走原有兜底动作。合法输出的官方RA/SR奖励公式不变。
 
@@ -181,7 +220,7 @@ SFT/PPO训练、验证、选优数据保存在metrics；各阶段摘要在manife
 
 日志只记录实际执行的行为。正式延迟比较需用固定后端、预热和重复批量实验；单次普通CityFlow耗时不能替代完整基准。当前代码没有实现的异步对照、鲁棒性扰动、人工评分及额外消融，不能仅凭增加日志宣称已覆盖相应论文实验。
 
-验收直接启动正式训练和评测入口，临时修改主配置中的普通参数后恢复，不维护另一份训练配置。测试代码与本轮结果见`my_tests/test_output_storage.py`、`my_tests/test_cli_results.py`和`my_tests/输出精简测试结果.md`；无新增依赖。
+保留的真实模型集成测试直接启动正式训练入口，在my_tests中创建临时小样本配置，不修改主配置，不维护另一套训练实现。测试用途与执行命令见`my_tests/README.md`；输出边界回归检查为`my_tests/test_output_storage.py`。历史一次性脚本、重复报告和测试输出已清理；无新增依赖。
 
 ## 实现边界
 
