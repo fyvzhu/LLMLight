@@ -118,9 +118,8 @@ class VLLMLocalGenerator:
             # Generate using the base model
             outputs = self.llm.generate(formatted_prompts, self.sampling_params)
 
-        self.last_batch=[{'query_ids':list(out.prompt_token_ids),'response_ids':list(out.outputs[0].token_ids)} for out in outputs]
         if self.cfg and getattr(self,'record_metrics',True):
-            metrics(self.cfg,getattr(self,'metrics_name','ppo_inference'),{'purpose':getattr(self,'purpose','training_rollout'),'module':getattr(self,'module','unknown'),'split':getattr(self,'split','unknown'),'batch_size':len(prompts),'batch_wall_time_s':time.perf_counter()-started,'completion_tokens':[len(r['response_ids']) for r in self.last_batch]})
+            metrics(self.cfg,getattr(self,'metrics_name','ppo_inference'),{'purpose':getattr(self,'purpose','training_rollout'),'module':getattr(self,'module','unknown'),'split':getattr(self,'split','unknown'),'batch_size':len(prompts),'batch_wall_time_s':time.perf_counter()-started,'completion_tokens':[len(out.outputs[0].token_ids) for out in outputs]})
         responses = [output.outputs[0].text for output in outputs]
         return responses
 
@@ -204,7 +203,6 @@ def generate_offline_data(vllm_generator, dataset):
     print("Generating ATR responses...")
     vllm_generator.module='SR'
     responses_atr = vllm_generator.generate_batch(prompts_atr)
-    atr_tokens=vllm_generator.last_batch
 
     # Prepare all RA prompts
     prompts_ra = [get_ra_user_prompt_wsys(dataset[i], responses_atr[i]) for i in range(len(dataset))]
@@ -213,7 +211,6 @@ def generate_offline_data(vllm_generator, dataset):
     print("Generating RA responses...")
     vllm_generator.module='RD'
     responses_ra = vllm_generator.generate_batch(prompts_ra)
-    ra_tokens=vllm_generator.last_batch
 
     # Calculate rewards and save data
     print("Calculating rewards...")
@@ -228,9 +225,7 @@ def generate_offline_data(vllm_generator, dataset):
             'reward_atr': reward_atr,
             'reward_ra': reward_ra,
             'prompt_atr': prompts_atr[i],
-            'prompt_ra': prompts_ra[i],
-            'query_atr_ids':atr_tokens[i]['query_ids'],'response_atr_ids':atr_tokens[i]['response_ids'],
-            'query_ra_ids':ra_tokens[i]['query_ids'],'response_ra_ids':ra_tokens[i]['response_ids']
+            'prompt_ra': prompts_ra[i]
         })
 
     return offline_data
@@ -244,12 +239,12 @@ def prepare_ppo_data_from_offline(offline_data, tokenizer, device):
 
     for item in offline_data:
         # ATR data
-        query_atr = torch.tensor(item['query_atr_ids'],dtype=torch.long,device=device)
-        response_atr = torch.tensor(item['response_atr_ids'],dtype=torch.long,device=device)
+        query_atr = tokenizer.encode(item['prompt_atr'], return_tensors="pt", truncation=True, max_length=8192).squeeze().to(device)
+        response_atr = tokenizer.encode(item['response_atr'], return_tensors="pt", truncation=True, max_length=2048).squeeze().to(device)
 
         # RA data
-        query_ra = torch.tensor(item['query_ra_ids'],dtype=torch.long,device=device)
-        response_ra = torch.tensor(item['response_ra_ids'],dtype=torch.long,device=device)
+        query_ra = tokenizer.encode(item['prompt_ra'], return_tensors="pt", truncation=True, max_length=8192).squeeze().to(device)
+        response_ra = tokenizer.encode(item['response_ra'], return_tensors="pt", truncation=True, max_length=2048).squeeze().to(device)
 
         queries.extend([query_atr, query_ra])
         responses.extend([response_atr, response_ra])
@@ -392,12 +387,13 @@ def select_best(cfg, epoch, evaluation, updates):
     print(f'[PPO best] epoch={epoch} RA reward={score:.4f}',flush=True)
 
 def build_trainer(cfg,previous=None):
-    from trl import PPOTrainer,PPOConfig
+    from trl import PPOConfig
+    from training.collmlight.ppo_trainer import CheckpointedPPOTrainer
     model,tokenizer=load_models_for_ppo(str(cfg.artifact('sft_merged')),cfg['PPO_MAX_NEW_TOKENS'],cfg,previous)
     config=PPOConfig(batch_size=cfg['PPO_BATCH_SIZE'],mini_batch_size=cfg['PPO_MINI_BATCH_SIZE'],
         gradient_accumulation_steps=cfg['PPO_GRADIENT_ACCUMULATION_STEPS'],learning_rate=cfg['PPO_LEARNING_RATE'],
         ppo_epochs=cfg['PPO_OPTIMIZATION_EPOCHS'],whiten_rewards=cfg['PPO_WHITEN_REWARDS'],optimize_device_cache=True,seed=cfg['RANDOM_SEED'],log_with=None)
-    return PPOTrainer(config=config,model=model,tokenizer=tokenizer,ref_model=None),tokenizer
+    return CheckpointedPPOTrainer(config=config,model=model,tokenizer=tokenizer,ref_model=None),tokenizer
 
 
 @exclusive_stage
