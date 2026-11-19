@@ -17,7 +17,8 @@ def run_cityflow(cfg, model_path=None, run_counts=None, dataset=None, traffic_fi
     if model_path and cfg['CITYFLOW_MODEL_PATH'] and str(Path(model_path).resolve())!=str(cfg.path('CITYFLOW_MODEL_PATH')):
         raise ValueError('Conflicting explicit model paths')
     explicit=model_path or (cfg.path('CITYFLOW_MODEL_PATH') if cfg['CITYFLOW_MODEL_PATH'] else None)
-    if cfg.run_dir and explicit is not None and Path(explicit).resolve()!=cfg.export_dir.resolve():
+    if cfg.run_dir and explicit is not None and Path(explicit).resolve() not in {
+            (cfg.model_dir/'sft_merged').resolve(),(cfg.model_dir/'trained_best_model').resolve()}:
         raise ValueError('run-dir and explicit model identify different experiments; select just the explicit model for a new evaluation')
     model_path=require_full_model(model_path or cfg.cityflow_model)
     if cfg['CITYFLOW_BACKEND'] != 'llama':

@@ -51,7 +51,7 @@ DEFAULTS.update(DATA_PREPARATION='reuse', ALGORITHM=COLLMLIGHT_ALGORITHM,
     VLLM_GPU_MEMORY=0.25, SFT_SAVE_STEPS=1, SFT_SAVE_STRATEGY='epoch', SFT_BEST_METRIC='eval_loss',
     SFT_GREATER_IS_BETTER=False, SFT_EVAL_STRATEGY='epoch', SFT_SAVE_TOTAL_LIMIT=2, CITYFLOW_PORT=23333,
     CITYFLOW_DISABLE_SR=False, CITYFLOW_SYNCHRONOUS_SR=False)
-DEFAULTS.update(PPO_ROLLOUT_BATCH_SIZE=16, PPO_SAVE_STEPS=5, PPO_SAVE_TOTAL_LIMIT=2)
+DEFAULTS.update(PPO_ROLLOUT_BATCH_SIZE=64, PPO_SAVE_STEPS=5, PPO_SAVE_TOTAL_LIMIT=2)
 # Sampling defaults come from the preserved official CLI, not another copy.
 from run_fts import parse_args as _sampling_args, SAMPLING_CONFIG_FIELDS
 _sampling_defaults=_sampling_args([])
@@ -152,10 +152,11 @@ def digest(value):
 
 class TrainingConfig:
     def __init__(self, env_file=None, overrides=None, config_file=None, run_dir=None, evaluation=False,
-                 training_mode=None, sft_source=None):
+                 training_mode=None, selection_stage=None):
         self.env_file = env_file
         self.training_mode = training_mode or 'sft_ppo'
-        self.sft_source = Path(sft_source).resolve() if sft_source else None
+        if selection_stage not in (None,'sft','ppo'):raise ValueError('Unknown selected training stage')
+        self._selection_stage=selection_stage
         self.run_dir = Path(run_dir).resolve() if run_dir else None
         env_file = Path(env_file) if env_file else ROOT / '.env'
         if not env_file.is_absolute():
@@ -195,7 +196,6 @@ class TrainingConfig:
             self.training_mode=manifest['training_mode']
             if training_mode and training_mode!=self.training_mode:
                 raise ValueError('Resume through the entry corresponding to this run training_mode')
-            self.sft_source=Path(manifest['parent_run']) if manifest.get('parent_run') else None
             if evaluation:self.values.update(eval_values)
             self.values['TEACHER_OUTPUT_PATH'] = str(self.run_dir/'data/teacher_data/syn_rt_data.json')
         self.values['RUN_NAME']=self.values['ALGORITHM']
@@ -244,7 +244,7 @@ class TrainingConfig:
 
     @property
     def selection_stage(self):
-        return 'sft' if self.training_mode=='sft_only' else 'ppo'
+        return self._selection_stage or ('sft' if self.training_mode=='sft_only' else 'ppo')
 
     @property
     def out(self):
@@ -265,11 +265,16 @@ class TrainingConfig:
 
     @property
     def export_dir(self):
-        return self.path('EXPORT_OUTPUT_DIR') if self['EXPORT_OUTPUT_DIR'] else self.model_dir / 'trained_best_model'
+        name='sft_merged' if self.selection_stage=='sft' else 'trained_best_model'
+        return self.path('EXPORT_OUTPUT_DIR') if self['EXPORT_OUTPUT_DIR'] else self.model_dir / name
 
     @property
     def cityflow_model(self):
-        return self.path('CITYFLOW_MODEL_PATH') if self['CITYFLOW_MODEL_PATH'] else self.export_dir
+        if self['CITYFLOW_MODEL_PATH']:return self.path('CITYFLOW_MODEL_PATH')
+        if self.run_dir:
+            published=read_json(self.run_dir/'manifest.json').get('final_model')
+            if published:return Path(published)
+        return self.export_dir
 
     def secret(self):
         name = self['TEACHER_API_KEY_ENV']

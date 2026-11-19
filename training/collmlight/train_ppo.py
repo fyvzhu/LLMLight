@@ -1,4 +1,4 @@
-"""Complete LoRA-PPO from an explicitly selected SFT run."""
+"""Continue LoRA-PPO inside an existing completed SFT training directory."""
 if __package__ in (None, ''):
     import sys
     from pathlib import Path

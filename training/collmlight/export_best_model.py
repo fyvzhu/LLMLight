@@ -73,7 +73,7 @@ def export_best(cfg):
         if manifest['source_signature']!=signature or weights_fingerprint(target)!=manifest['exported_weights']:
             raise ValueError('Existing export does not match this best checkpoint')
         require_full_model(target)
-        stage_summary(cfg,'export',{'model_path':str(target),'model_manifest':'models/trained_best_model/model_manifest.json'})
+        stage_summary(cfg,'export_'+stage,{'model_path':str(target),'model_manifest':str((target/'model_manifest.json').relative_to(cfg.out))})
         return target
     target.parent.mkdir(parents=True,exist_ok=True)
     source_bytes=sum(p.stat().st_size for p in base.glob('*.safetensors'))
@@ -118,7 +118,7 @@ def export_best(cfg):
         logfile=cfg.out/'logs/train.log'
         env=dict(os.environ,USE_TF='0',VLLM_USE_V1='0',VLLM_WORKER_MULTIPROC_METHOD='spawn',TOKENIZERS_PARALLELISM='false')
         command=[sys.executable,'-m','training.collmlight.ppo_ft','--config',str(cfg.config_file),'--run-dir',str(cfg.out),
-            '--evaluate-model',str(temp),'--output',str(output)]
+            '--evaluate-model',str(temp),'--output',str(output),'--selection-stage',stage]
         if cfg.env_file:command+=['--env-file',str(cfg.env_file)]
         result=run_logged_process(cfg,command,'export integrity through official PPO protocol',env)
         if result.returncode:raise RuntimeError(f'Official-protocol export integrity inference failed: {logfile}')
@@ -135,7 +135,7 @@ def export_best(cfg):
             'standalone':True,'validated':True,'validation':report}
         atomic_json(temp/'model_manifest.json',manifest)
         require_full_model(temp);temp.rename(target)
-        stage_summary(cfg,'export',{'model_path':str(target),'model_manifest':'models/trained_best_model/model_manifest.json'})
+        stage_summary(cfg,'export_'+stage,{'model_path':str(target),'model_manifest':str((target/'model_manifest.json').relative_to(cfg.out))})
         from utils.experiment import clean_workspace
         clean_workspace(cfg.out,temp)
         print('Exported best full model:',target,flush=True)
@@ -147,5 +147,6 @@ def export_best(cfg):
 
 
 if __name__=='__main__':
-    args=config_args(__doc__).parse_args()
-    export_best(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir))
+    parser=config_args(__doc__);parser.add_argument('--stage',choices=['sft','ppo'],required=True)
+    args=parser.parse_args()
+    export_best(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir,selection_stage=args.stage))

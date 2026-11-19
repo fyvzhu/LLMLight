@@ -69,9 +69,6 @@ def create_run(cfg, now=None):
         'training_mode':cfg.training_mode,'state':'created','stages':{},
         'timezone':'Asia/Shanghai','created_at':now.isoformat(),'created_utc':now.astimezone(timezone.utc).isoformat(),'host':socket.gethostname(),
         'configuration_sha256':digest(values)})
-    if cfg.sft_source:
-        manifest=read_json(folder/'manifest.json');manifest['parent_run']=str(cfg.sft_source)
-        atomic_json(folder/'manifest.json',manifest)
     return folder
 
 

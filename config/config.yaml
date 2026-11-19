@@ -69,7 +69,7 @@ ppo:
   top_p: 0.95
   whiten_rewards: true
   gpu_memory_utilization: 0.9
-  rollout_batch_size: 16 # 每个生成小批完成后提交缓存；中断只重做未提交的小批
+  rollout_batch_size: 64 # 生成提交批量与vLLM并发上限共用；固定启用CUDA Graph，每批完成后提交缓存
   save_steps: 5         # 每5次完整 trainer.step 保存轮内训练状态
   save_total_limit: 2   # 仅轮换保留最近2份完整轮内断点；epoch Adapter 仍按原规则保存
 

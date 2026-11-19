@@ -28,16 +28,16 @@ training:
 # 仅 SFT，包含验证、最佳 Adapter 与完整模型导出
 .venv/bin/python training/collmlight/train_sft.py
 
-# 仅 PPO，明确指定 SFT 来源；来源只需 SFT 阶段完成
+# 在同一个运行目录中继续 PPO；要求该目录的 SFT 阶段已完成
 .venv/bin/python training/collmlight/train_ppo.py --sft-run /绝对路径/SFT运行目录
 
 # 仅评测，不自动训练；加载本次训练导出的完整最佳模型
 .venv/bin/python run_CoLLMlight.py --run-dir outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
 ```
 
-也可在主配置的 `cityflow_test.model_path` 填写完整模型路径，然后直接运行 `run_CoLLMlight.py`。不要同时指定互相冲突的模型路径与run-dir。
+也可在主配置的 `cityflow_test.model_path` 填写完整模型路径，然后直接运行 `run_CoLLMlight.py`。`--run-dir` 默认加载 manifest 中最近成功导出的 final_model：仅完成 SFT 时是 sft_merged，PPO 导出后是 trained_best_model。同一运行内也可用 --model-path 显式选择这两者做阶段对比。不要同时指定互相冲突的模型路径。
 
-CityFlow正式入口统一使用发布版OpenAI兼容服务适配器，`cityflow_test.backend`固定使用`llama`；这个名称也适用于Qwen模型。先启动服务，模型参数使用与评测一致的完整模型绝对路径，端口与YAML一致，例如：
+CityFlow正式入口统一使用发布版OpenAI兼容服务适配器，`cityflow_test.backend`固定使用`llama`；这个名称也适用于Qwen模型。先启动服务，模型参数使用与评测一致的完整模型绝对路径，端口与YAML一致；仅 SFT 时把下例 trained_best_model 改为 sft_merged：
 
 ```bash
 VLLM_USE_V1=0 .venv/bin/python -m vllm.entrypoints.openai.api_server \
@@ -48,7 +48,22 @@ VLLM_USE_V1=0 .venv/bin/python -m vllm.entrypoints.openai.api_server \
 
 入口会检查服务实际提供的模型身份，避免误测其他权重。Transformers仅用于完整模型独立加载与logits检查。论文延迟实验应固定服务后端、硬件、生成参数及批量，排除预热；不能与此前Transformers本地推理计时混合。`my_tests/benchmark_inference.py`现在也调用同一服务，记录的是整批API请求往返耗时，不代表纯GPU算子耗时。
 
-三个入口共用 `pipeline.py`；由入口决定阶段，配置中不再保留训练阶段开关或 SFT 来源字段。`train_ppo.py` 使用 `--sft-run` 指定来源，新建独立运行目录；来源可以是 SFT 完成但 PPO 失败的整流程目录。SFT用最小验证loss，PPO用最大验证RA reward，平分保留较早者；CityFlow测试不参与选模。
+三个入口共用 `pipeline.py`；由入口决定阶段，配置中没有训练阶段开关。`train_sft.py` 创建一次运行目录；`train_ppo.py --sft-run <同一目录>` 在该目录内继续，不创建目录、不复制 SFT 数据或模型、不重训 SFT。第一次启动 PPO 用 --sft-run，PPO 已开始后的中断恢复用 --resume-run，参数仍指向同一目录。SFT用最小验证loss，PPO用最大验证RA reward，平分保留较早者；CityFlow测试不参与选模。
+
+同目录的分阶段执行与恢复要求始终使用同一份配置；在启动 SFT 前设置好后续 PPO 所需的 inputs.traffic_samples 和 PPO 参数。SFT 阶段完成后不修改冻结配置。全流程入口也使用同一套阶段实现。
+
+SFT 完整模型统一导出到 `models/sft_merged/`，可以独立加载评测，同时直接作为 PPO 基础模型；PPO 完整最佳模型导出到 `models/trained_best_model/`。两个阶段分别记录 export_sft、export_ppo，不互相覆盖。删除了独立 merge_sft_adapter.py 合并流程，模型合并和验收统一由 export_best_model.py 执行。
+
+```bash
+# 第一步：创建运行目录并完成 SFT
+.venv/bin/python training/collmlight/train_sft.py
+# 第二步：将上一步实际打印的目录填入此处，继续 PPO
+.venv/bin/python training/collmlight/train_ppo.py --sft-run outputs/CoLLMLight/CoLLMLight_同一个时间
+# PPO 中断后，仍然填写这个目录
+.venv/bin/python training/collmlight/train_ppo.py --resume-run outputs/CoLLMLight/CoLLMLight_同一个时间
+```
+
+manifest 的 training_mode 在 SFT 单阶段完成时为 sft_only，接着启动 PPO 时变为 sft_ppo；active_entry 记录本次入口，run_id 和冻结配置不变。logs/train.log 按 stage/attempt 追加，结构化指标仍按断点提交位置恢复。
 
 ## SFT标准Checkpoint与断点续训
 
@@ -66,14 +81,14 @@ sft:
 
 上例仅说明参数含义，不是另一份运行配置。只修改主`config/config.yaml`。`save_total_limit`是标准checkpoint的总保留数，建议2，空间允许可设3；框架保护最佳和最近候选，不是“最佳之外再保留N个”。原生机制在limit=1时有最佳/最新保留特例，因此不把1视为严格磁盘上限。清理前会先写新checkpoint，应预留保存峰值空间。完整LoRA训练checkpoint包含Adapter、optimizer.pt、scheduler.pt、rng_state.pth、trainer_state.json，以及需要时的scaler.pt；不重复保存冻结基础模型。
 
-每次运行的原生路径为`models/sft_checkpoints/checkpoint-N/`，不再维护attempt_N/step_N保存流程。`models/sft_best/`仅归档最佳Adapter、Tokenizer及验证元数据，不携带优化器状态。完整最佳模型的导出与PPO初始化路径保持不变；不要把best与latest混为一谈。
+每次运行的原生路径为`models/sft_checkpoints/checkpoint-N/`，不再维护attempt_N/step_N保存流程。`models/sft_best/`仅归档最佳Adapter、Tokenizer及验证元数据，不携带优化器状态；完整 SFT 模型位于 models/sft_merged，供独立评测和 PPO 初始化。不要把best与latest混为一谈。
 
 ```bash
 .venv/bin/python training/collmlight/train_collmlight.py \
   --resume-run outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒
 ```
 
-保持与该运行相同的训练配置，并使用最初创建该运行的同一个入口。整流程使用上例；仅 SFT 将文件名改为 `train_sft.py`，仅 PPO 改为 `train_ppo.py`，恢复时不再传 `--sft-run`。入口跳过已完成阶段，SFT从同次运行最近的完整标准checkpoint恢复模型、优化器、调度器、随机数及数据进度，日志按新的attempt追加。没有checkpoint且SFT尚未开始更新时从头启动；非空旧Adapter目录、缺少状态文件或数据/配置/版本不一致时明确失败，不静默改成权重续训，不维护旧格式兼容。旧Adapter不能补回以前未保存的优化器与随机数状态。
+保持与该运行相同的训练配置。SFT 单阶段中断使用 `train_sft.py --resume-run`；PPO 中断使用 `train_ppo.py --resume-run`，参数始终是同一个训练目录；整流程也可以使用上例恢复。恢复时不再传 `--sft-run`。入口跳过已完成阶段，SFT从同次运行最近的完整标准checkpoint恢复模型、优化器、调度器、随机数及数据进度，日志按新的attempt追加。没有checkpoint且SFT尚未开始更新时从头启动；非空旧Adapter目录、缺少状态文件或数据/配置/版本不一致时明确失败，不静默改成权重续训，不维护旧格式兼容。旧Adapter不能补回以前未保存的优化器与随机数状态。
 
 checkpoint中已完成全部计划更新、但外层阶段尚未写完成报告时，只整理最佳归档和报告，不多执行一次更新。`manifest.json`的`stages.sft.summary`区分累计updates、此次new_updates和恢复起点resumed_step；最佳权重变化统计也明确其参照。中断后最多回退到最近一次完整保存，不恢复尚未保存的梯度或更新。同环境续训一致性需实测，不承诺任意硬件/版本间逐位一致。
 
@@ -83,31 +98,33 @@ Trainer返回的train_loss属于本次调用的汇总，跨中断的完整学习
 
 ```yaml
 ppo:
-  rollout_batch_size: 16
+  rollout_batch_size: 64
   save_steps: 5
   save_total_limit: 2
 ```
 
-这些字段已经位于唯一主配置中。生成每完成一个小批就提交文本结果、实际token统计、模型/数据/参数身份及进度；例如ATR已全部保存、RA已保存400条，恢复时不会重做ATR或这400条RA。尚未提交的小批需重做，不恢复GPU内部生成到一半的token或KV cache。
+这些字段已经位于唯一主配置中。`rollout_batch_size`同时控制提交批量和vLLM并发上限，默认64；生成固定启用CUDA Graph，保持异步输出处理关闭。生成每完成一个小批就提交文本结果、实际token统计、模型/数据/参数身份及进度；例如ATR已全部保存、RA已保存400条，恢复时不会重做ATR或这400条RA。尚未提交的小批需重做，不恢复GPU内部生成到一半的token或KV cache。
+
+PPO更新固定裁剪每个微批次中整列均为padding的位置，保留真实token、绝对位置及损失掩码。奖励/GAE仍按原批次坐标计算，梯度更新时同步裁剪旧概率、价值、优势等对应位置；奖励公式、优化轮数、小批次2、4bit准备函数和BF16 autocast不变。没有另设关闭裁剪或恢复eager生成的第二条训练路径。
 
 当前轮缓存位于 `tmp/ppo_rollouts/epoch_N/`，四个阶段为 train_atr、train_ra、eval_atr、eval_ra。缓存只用于当前轮恢复，不永久保存全部历史rollout。不同模型、数据、代码或生成参数不能复用同一缓存。
 
 在完整 `trainer.step()` 返回后，按 `ppo.save_steps` 保存轮内状态，第一步前和最后一个完整更新也保存。原生Accelerate状态包含优化器、存在时的调度器、随机数及梯度累积计数；保存钩子仅写LoRA与价值头，另记录PPO控制器/统计、epoch、下一条交通记录位置和rollout身份，不重复保存冻结基础权重。断点位于 `checkpoints/ppo_resume/epoch_N_update_U/`，成功提交新断点后才轮换，默认保留最近2份。
 
-恢复命令始终指定原运行目录，并使用相同入口：
+恢复命令始终指定同一个训练运行目录：
 
 ```bash
 # 整流程运行恢复
 .venv/bin/python training/collmlight/train_collmlight.py --resume-run /绝对路径/原运行目录
-# PPO-only 运行恢复
-.venv/bin/python training/collmlight/train_ppo.py --resume-run /绝对路径/原PPO运行目录
+# 分阶段运行进入 PPO 后恢复
+.venv/bin/python training/collmlight/train_ppo.py --resume-run /绝对路径/同一个SFT和PPO运行目录
 ```
 
 已完成的epoch跳过；未完成epoch从最近成功保存的完整更新边界继续，复用同轮rollout。未保存的更新需重做。轮内恢复优化器和价值头，不改变官方跨epoch重新初始化优化器/价值头的行为；完整epoch的Adapter仍保存到 `models/ppo_checkpoints/epoch_N/`。
 
 结构化PPO指标记录run、attempt、epoch、global_update及rollout身份。断点同时提交指标字节位置；恢复时回滚未被模型断点采用的指标尾部，而不是只保留最后一次attempt。已完成epoch和SFT指标保留，`logs/train.log`继续保存分attempt的原始历史。不要将控制台进度条当作正式实验指标源。
 
-旧目录的SFT成果仍可通过 `train_ppo.py --sft-run <旧目录>` 复用，包括SFT成功但PPO失败的目录。旧版本未保存的生成结果、优化器和RNG不能事后补回；本次不修改历史目录配置、不提供旧开关或旧断点格式兼容。配置schema改变的历史运行请作为SFT来源创建新的PPO运行，而不是在历史目录强行切换配置。
+本流程适用于当前代码创建的运行目录。历史目录不自动迁移，不提供旧开关、旧导出状态或独立 PPO 来源复制流程的兼容；过去未保存的生成结果、优化器和RNG不能事后补回。已有 PPO 断点也要求相关训练代码未改变。
 
 保留的测试入口与验收结论见 [测试说明](my_tests/README.md)。默认 BF16/SDPA 更新不保证逐位确定；状态恢复与确定性算子下的对照已分别验证。历史测试模型和日志已经清理。
 
@@ -118,7 +135,7 @@ ppo:
 | sample_and_generate | 忽略，自动采样 | 忽略，自动生成 |
 | generate_teacher | 必填 | 忽略，自动生成 |
 | reuse，整流程 | 必填，作为PPO场景输入 | 必填 |
-| 仅PPO入口 | 必填 | 不使用；SFT来源由 --sft-run 指定 |
+| 仅PPO入口 | 同目录已有采样文件，或从冻结 inputs.traffic_samples 复制 | 不重新生成；使用同目录已完成的 SFT |
 | reuse，仅SFT | 忽略 | 必填 |
 
 未启用的输入可设null，不需要额外enable开关。输入数据不会被覆盖。可复用输入分目录存放：
@@ -175,10 +192,10 @@ outputs/CoLLMLight/CoLLMLight_年月日_时分秒_微秒/
 ├── models/
 │   ├── sft_checkpoints/checkpoint-N/ # Trainer完整训练状态；按save_total_limit轮换
 │   ├── sft_best/                # 验证最佳SFT Adapter及加载、选优元数据
-│   ├── sft_merged/              # PPO依赖的完整SFT基础模型
+│   ├── sft_merged/              # 唯一完整SFT模型：独立评测、PPO初始化共用
 │   ├── ppo_checkpoints/epoch_N/  # 保持按epoch保存增量权重
 │   ├── ppo_best/                # 最佳Adapter；不可变模型文件与对应checkpoint硬链接
-│   └── trained_best_model/      # 独立完整模型；model_manifest.json内保存唯一导出验收
+│   └── trained_best_model/      # PPO完整最佳模型；不覆盖sft_merged
 ├── logs/
 │   ├── train.log                # 全阶段及vLLM子进程共用；恢复时追加
 │   ├── events.jsonl             # 阶段状态转换和耗时

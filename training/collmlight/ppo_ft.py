@@ -50,8 +50,9 @@ class VLLMLocalGenerator:
             "model": self.base_model_path,
             "max_model_len": self.max_model_len,
             "gpu_memory_utilization": self.cfg["VLLM_GPU_MEMORY"] if self.cfg else 0.9,
-            "enforce_eager": True,
-            "max_num_seqs": 16,
+            "enforce_eager": False,
+            "max_num_seqs": self.cfg['PPO_ROLLOUT_BATCH_SIZE'] if self.cfg else 64,
+            "disable_async_output_proc": True,
             "dtype": "bfloat16",
             "tensor_parallel_size": num_gpus
         }
@@ -534,7 +535,8 @@ if __name__=='__main__':
     parser.add_argument('--rollout-request')
     parser.add_argument('--output')
     parser.add_argument('--evaluate-model')
+    parser.add_argument('--selection-stage',choices=['sft','ppo'])
     args=parser.parse_args()
     if args.rollout_request:generate_rollout(args.rollout_request)
-    elif args.evaluate_model:evaluate_full_model(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir),args.evaluate_model,args.output)
+    elif args.evaluate_model:evaluate_full_model(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir,selection_stage=args.selection_stage),args.evaluate_model,args.output)
     else:run(TrainingConfig(args.env_file,config_file=args.config_file,run_dir=args.run_dir))
